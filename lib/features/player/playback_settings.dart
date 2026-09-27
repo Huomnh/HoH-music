@@ -12,7 +12,6 @@ import '../../core/metadata/cover_art.dart';
 import '../../platforms/windows/global_hotkey_service.dart';
 import '../../shared/theme/app_accent.dart';
 import '../../shared/theme/app_colors.dart';
-import '../../shared/constants.dart';
 import '../../shared/widgets/widget_kit/glass_panel.dart';
 import '../library/library_store.dart';
 
@@ -77,9 +76,6 @@ class PlaybackSettingsView extends ConsumerWidget {
                       const SizedBox(height: 18),
                       _GroupLabel('歌曲封面', color: accent.primary),
                       const CoverSourceSection(),
-
-                      const SizedBox(height: 18),
-                      _VersionInfoSection(accent: accent),
                     ],
                   ),
                 ),
@@ -88,67 +84,6 @@ class PlaybackSettingsView extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _VersionInfoSection extends StatelessWidget {
-  const _VersionInfoSection({required this.accent});
-
-  final AppAccent accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool hasRepository = AppConstants.repositoryUrl.isNotEmpty;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        _GroupLabel('版本说明', color: accent.primary),
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            color: Colors.black.withValues(alpha: 0.20),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Icon(Icons.info_outline_rounded, size: 16, color: accent.primary),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'HoH music',
-                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  const Spacer(),
-                  Text(
-                    'v${AppConstants.version}',
-                    style: TextStyle(color: accent.primary, fontSize: 11),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                '当前为 Windows beta 版本，问题反馈、功能建议和更新说明将在项目仓库中维护。',
-                style: TextStyle(color: AppColors.textTertiary, fontSize: 11, height: 1.5),
-              ),
-              const SizedBox(height: 8),
-              if (hasRepository)
-                SelectableText(
-                  AppConstants.repositoryUrl,
-                  style: TextStyle(color: accent.primary, fontSize: 11),
-                )
-              else
-                const Text(
-                  'GitHub 仓库链接将在仓库创建后显示。',
-                  style: TextStyle(color: AppColors.textTertiary, fontSize: 10.5),
-                ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }

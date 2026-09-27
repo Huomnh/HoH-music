@@ -52,6 +52,7 @@ import 'lyrics/lyrics_scene_registry.dart';
 import 'lyrics/lyrics_view.dart';
 import 'lyrics/lyrics_style.dart';
 import 'playback_settings.dart';
+import 'version_info_view.dart';
 
 /// 播放页。
 class PlayerPage extends ConsumerStatefulWidget {
@@ -117,6 +118,12 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   void _showPlaybackSettings() {
     if (_view != _MainView.playbackSettings) {
       setState(() => _view = _MainView.playbackSettings);
+    }
+  }
+
+  void _showVersionInfo() {
+    if (_view != _MainView.versionInfo) {
+      setState(() => _view = _MainView.versionInfo);
     }
   }
 
@@ -293,6 +300,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                                         onSelectSettings: _showSettings,
                                         onSelectPlaybackSettings:
                                             _showPlaybackSettings,
+                                        onSelectVersionInfo: _showVersionInfo,
                                         onSelectPlayer: _showPlayer,
                                         onSelectView: _showView,
                                       ),
@@ -308,6 +316,8 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                                         const AppearanceSettingsView(),
                                       _MainView.playbackSettings =>
                                         const PlaybackSettingsView(),
+                                      _MainView.versionInfo =>
+                                        const VersionInfoView(),
                                       // 曲库页面（0.0.27）
                                       _MainView.allSongs =>
                                         const AllSongsView(),
@@ -391,6 +401,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                   onTap: () {
                     Navigator.pop(sheetContext);
                     _showPlaybackSettings();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.info_outline_rounded),
+                  title: const Text('版本说明'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _showVersionInfo();
                   },
                 ),
               ],
@@ -503,6 +521,9 @@ enum _MainView {
 
   /// 播放设置页（音乐库扫描记录 + 启动行为）。
   playbackSettings,
+
+  /// 版本说明和 GitHub 反馈入口。
+  versionInfo,
 
   /// 曲库页面：所有歌曲 / 专辑 / 歌手 / 我的喜欢 / 某个歌单。
   allSongs,
@@ -816,6 +837,7 @@ class _Sidebar extends ConsumerWidget {
     required this.playlistId,
     required this.onSelectSettings,
     required this.onSelectPlaybackSettings,
+    required this.onSelectVersionInfo,
     required this.onSelectPlayer,
     required this.onSelectView,
   });
@@ -841,6 +863,9 @@ class _Sidebar extends ConsumerWidget {
 
   /// 打开播放设置页。
   final VoidCallback onSelectPlaybackSettings;
+
+  /// 打开版本说明页。
+  final VoidCallback onSelectVersionInfo;
 
   /// 切回播放页。
   final VoidCallback onSelectPlayer;
@@ -1011,6 +1036,12 @@ class _Sidebar extends ConsumerWidget {
             icon: Icons.library_music_outlined,
             active: view == _MainView.playbackSettings,
             onTap: onSelectPlaybackSettings,
+          ),
+          _NavItem(
+            label: '版本说明',
+            icon: Icons.info_outline_rounded,
+            active: view == _MainView.versionInfo,
+            onTap: onSelectVersionInfo,
           ),
 
           // 强调色目前取自背景，写在下面让人知道颜色是从哪来的
