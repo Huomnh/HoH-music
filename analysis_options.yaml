@@ -1,0 +1,36 @@
+# Dart / Flutter 静态分析配置
+# 运行方式：在 VS Code 中保存即自动分析，或终端执行 `flutter analyze`
+
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+  errors:
+    # 骨架阶段存在大量 TODO 占位实现，先降级为提示，避免刷屏
+    todo: info
+
+  exclude:
+    # 代码生成产物
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    # Flutter 自动生成的平台工程目录
+    - "build/**"
+    - "**/android/**"
+    - "**/ios/**"
+    - "**/windows/**"
+    - "**/macos/**"
+    - "**/linux/**"
+    - windows/**
+
+linter:
+  rules:
+    # 在本项目基础上额外开启的规则
+    always_declare_return_types: true
+    avoid_print: true
+    prefer_single_quotes: true
+    prefer_final_locals: true
+    require_trailing_commas: true

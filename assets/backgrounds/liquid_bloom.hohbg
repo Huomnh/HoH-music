@@ -1,0 +1,7 @@
+{
+  "format": "hoh-background",
+  "version": 1,
+  "renderer": "liquid-bloom",
+  "speed": 1.0,
+  "colors": ["0xFF5D7CFF", "0xFFFF78C8", "0xFF47E5C2"]
+}

@@ -1,0 +1,113 @@
+# HoH music beta application.
+# The supported release target and verified toolchain are documented in README.md.
+
+name: hoh_music
+description: "HoH music —— 覆盖 Windows / iOS / Android / Android TV / Apple TV 的全端音乐播放器。"
+publish_to: "none"
+# Versioning and prerelease policy: docs/版本控制规范.md
+version: 0.1.0-beta.1+1
+
+environment:
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ── 状态管理（文档 2.2 状态管理：Riverpod）─────────────────────────
+  flutter_riverpod: ^3.4.3
+
+  # ── 音频引擎（文档 3.1：MediaKit / 底层 libmpv）───────────────────
+  # media_kit 负责播放器与 Audio Pipeline 抽象；
+  # media_kit_libs_video 自动引入各平台原生库（Windows/Android/iOS/macOS/Linux）。
+  media_kit: ^1.2.6
+  media_kit_libs_video: ^1.0.7
+
+  # ── 本地数据库（文档 3.4：Drift + SQLite WAL 模式）────────────────
+  drift: ^2.35.0
+  drift_flutter: ^0.3.1
+
+  # ── 网络协议（文档 3.7：WebDAV 客户端，dio 封装）──────────────────
+  dio: ^5.11.1
+
+  # ── JS 引擎（文档 3.2：QuickJS 沙箱，flutter_js 封装）─────────────
+  flutter_js: ^0.8.7
+
+  # ── 系统集成（文档 3.9：SMTC + 托盘 + 全局快捷键 + 防休眠）────────
+  # ⚠️ smtc_windows 是 **Rust 插件**（flutter_rust_bridge + cargokit）：
+  #    必须先装 rustup（`winget install Rustlang.Rustup`，装完重开终端），
+  #    否则 flutter build windows 会在 smtc_windows_cargokit.vcxproj 报 MSB8066。
+  #    0.0.24 已恢复（Rust 装好，实测能编译）。
+  smtc_windows: ^1.1.0
+  # ⚠️ 必须与 smtc_windows 的 **codegen 版本严格一致**（它用 2.11.1 生成）。
+  #    pub 默认会解析到更新的 2.13.x，运行时直接抛：
+  #      Bad state: smtc_windows's codegen version (2.11.1) should be
+  #      the same as runtime version (2.13.0)
+  #    所以这里**钉死版本**，别改成 `^2.11.1`。
+  flutter_rust_bridge: 2.11.1
+  window_manager: ^0.5.2
+  tray_manager: ^0.7.0
+  hotkey_manager: ^0.2.3
+  flutter_acrylic: ^1.1.4
+
+  # ── 元数据解析与工具（文档 3.7 元数据补全 / 3.3 主题打包）──────────
+  audio_metadata_reader: ^1.8.0
+  crypto: ^3.0.7
+  archive: ^4.3.0
+  path: ^1.9.1
+  path_provider: ^2.1.6
+  collection: ^1.19.1
+  # FFI 工具（malloc / toNativeUtf16 / sizeOf）。
+  # 0.0.25 起桌面歌词浮层直接调 Win32（user32/gdi32），需要它做内存与字符串转换。
+  ffi: ^2.1.4
+  shared_preferences: ^2.5.5
+
+  # ── 平台能力（导入音源文件）────────────────────────────────────
+  file_picker: ^13.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # ── 代码生成（Drift 数据库 / Freezed 数据模型）────────────────────
+  # 需要生成 .g.dart 时执行：dart run build_runner build --delete-conflicting-outputs
+  build_runner: ^2.16.1
+  drift_dev: ^2.35.0
+
+  # ── 静态检查与代码规范 ───────────────────────────────────────────
+  flutter_lints: ^6.0.0
+
+  # 说明：启动图标 / 启动页生成工具（flutter_launcher_icons、flutter_native_splash）
+  # 暂不引入，等准备好 assets/icons/app_icon.png 等素材后再加入。
+
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: KirakaraMaru
+      fonts:
+        - asset: assets/fonts/KirakaraMaru_v1.1.ttf
+  # 仅登记要随应用分发的静态资源。用户音乐库和可选音源脚本不打进安装包。
+  assets:
+    - assets/themes/          # 预置主题 / .hohtheme 主题包
+    - assets/icons/           # 界面图标
+    - assets/backgrounds/     # 可打包导入导出的 .hohbg 动态背景定义
+
+# ── 构建钩子覆盖（网络受限环境必需）──────────────────────────────
+# package:sqlite3 默认在构建时从 GitHub Releases 下载预编译的 sqlite3.dll，
+# 本机无法直连 github.com，会导致 flutter test / build 失败：
+#   SocketException: 信号灯超时时间已到 ... address = github.com, port = 24442
+# 此处通过官方支持的 url_pattern「用户定义项」把下载地址指向 GitHub 加速镜像。
+# $RELEASE_TAG 与 $FILENAME 由 sqlite3 自动替换，镜像回源的字节完全一致，
+# sqlite3 自身仍会用内置 sha256 校验下载结果。
+#
+# 如果镜像失效（下载报 404 或哈希不符），备选方案：
+#   1. 换用其他镜像前缀（gh-proxy.com / ghfast.top / hub.gitmirror.com）
+#   2. 挂上可用的代理后再构建，此时可删掉本段
+#   3. 改用系统自带 SQLite：把 url_pattern 换成 source: system
+# 官方说明：https://pub.dev/documentation/sqlite3/latest/topics/hook-topic.html
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3
+      url_pattern: "https://ghproxy.net/https://github.com/simolus3/sqlite3.dart/releases/download/$RELEASE_TAG/$FILENAME"

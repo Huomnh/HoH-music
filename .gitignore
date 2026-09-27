@@ -1,0 +1,49 @@
+# ── Dart / Flutter ────────────────────────────────────────────────
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+dist/
+.flutter-plugins
+.flutter-plugins-dependencies
+# Keep pubspec.lock tracked: HoH music is an application and beta builds must
+# resolve the same transitive dependency versions on every machine.
+
+# 代码生成产物（如需纳入版本管理，删除下面这几行）
+# *.g.dart
+# *.freezed.dart
+
+# ── 平台工程产物 ──────────────────────────────────────────────────
+**/android/.gradle/
+**/android/local.properties
+**/android/key.properties
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/windows/flutter/ephemeral/
+**/macos/Flutter/ephemeral/
+**/linux/flutter/ephemeral/
+
+# ── IDE ───────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.ipr
+*.iws
+.vs/
+*.swp
+
+# ── 操作系统 ──────────────────────────────────────────────────────
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ── 日志与临时文件 ────────────────────────────────────────────────
+*.log
+*.tmp
+*.bak

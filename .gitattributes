@@ -1,0 +1,29 @@
+# 统一换行符与编码，避免跨平台协作时 Git 反复提示改动
+* text=auto eol=lf
+
+# Dart 源码
+*.dart text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# Windows 原生工程必须保持 CRLF，否则资源文件可能出错
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+windows/** text eol=crlf
+
+# 二进制资源不参与换行符转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.mp3 binary
+*.flac binary
+*.wav binary
+*.m4a binary
