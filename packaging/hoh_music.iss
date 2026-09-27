@@ -34,7 +34,9 @@ VersionInfoProductVersion=0.1.0.1
 VersionInfoVersion=0.1.0.1
 
 [Tasks]
-Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加快捷方式："; Flags: unchecked
+; The desktop shortcut is enabled by default, while remaining removable in the
+; installer's task selection page.
+Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加快捷方式："
 
 [Files]
 ; Install the entire Flutter Release bundle so plugin DLLs, assets and media backends stay together.

@@ -10,6 +10,26 @@ HoH music 是基于 Flutter/Dart 的音乐播放器。当前可运行和验收�
 
 项目仓库：[github.com/Huomnh/HoH-music](https://github.com/Huomnh/HoH-music)；欢迎提交 Issue 反馈 Bug 或功能建议。
 
+## 界面预览
+
+以下图片来自当前项目的页面预览，后续 UI 更新会同步维护 `docs/preview/`：
+
+| 播放页 | 所有歌曲 |
+|---|---|
+| ![播放页](docs/preview/player-page.png) | ![所有歌曲](docs/preview/0.0.56-library-top.png) |
+
+| 在线搜索 | 音源管理 |
+|---|---|
+| ![在线搜索](docs/preview/0.0.39-online-search.png) | ![音源管理](docs/preview/0.0.55-sources.png) |
+
+| WebDAV | 外观设置 |
+|---|---|
+| ![WebDAV](docs/preview/0.0.54-webdav.png) | ![外观设置](docs/preview/appearance-settings.png) |
+
+| 播放设置 | 下载/音质设置 |
+|---|---|
+| ![播放设置](docs/preview/playback-settings.png) | ![音质设置](docs/preview/0.0.58-quality.png) |
+
 ## 当前功能
 
 - 本地音乐库：导入文件/文件夹、元数据读取、增量扫描、排序与收藏；所有歌曲只展示本地与已配置 WebDAV 曲库，不混入在线播放历史。
@@ -27,9 +47,9 @@ HoH music 是基于 Flutter/Dart 的音乐播放器。当前可运行和验收�
 ## Beta 验证状态
 
 - `flutter analyze`：通过（2026-09-27）。
-- `flutter test --reporter compact`：79 项通过（2026-09-27）。
+- `flutter test --reporter compact`：80 项通过（2026-09-27）。
 - `flutter build windows --release`：通过，产物为 `build/windows/x64/runner/Release/hoh_music.exe`。
-- Windows 安装器：[HoH-music-Setup-0.1.0-beta.1-Windows-x64.exe](dist/windows/HoH-music-Setup-0.1.0-beta.1-Windows-x64.exe) 已生成；自选路径静默安装/卸载冒烟测试通过。
+- Windows 安装器：本地生成于 `dist/windows/HoH-music-Setup-0.1.0-beta.1-Windows-x64.exe`；安装目录可自定义，并默认创建桌面快捷方式。安装包不提交源码仓库，公开下载请使用 [GitHub Releases](https://github.com/Huomnh/HoH-music/releases)。
 - 安装器当前未签名；正式公开分发建议使用可信代码签名证书，避免 Windows 发布者未知提示。
 - 安装需要管理员确认（VC++ 运行库可能需要系统级安装），安装目录可在向导中修改。
 - 干净机器安装/启动、实际播放和下载验收：尚未完成。
@@ -53,7 +73,14 @@ flutter build windows --release
 powershell -ExecutionPolicy Bypass -File scripts\package-windows.ps1
 ```
 
-安装包不含用户音乐库或歌曲文件。音源脚本单独放在安装目录 `music音源` 文件夹，须由用户手动导入，应用不会当作内置数据加载。打包器会从 Flutter bundle 中剔除 `assets/audio` 与 `assets/sources`。安装包需联网获取并校验 Microsoft 官方 x64 Visual C++ Redistributable；打包脚本用 Inno Setup 编译可选目录安装器，并默认做静默安装/卸载冒烟检查。输出位于 `dist\windows\`；使用 `-SkipInstallerSmokeTest` 可跳过本机安装器冒烟测试。
+安装包不含用户音乐库或歌曲文件。音源脚本单独放在安装目录 `music音源` 文件夹，须由用户手动导入，应用不会当作内置数据加载。打包器会从 Flutter bundle 中剔除 `assets/audio` 与 `assets/sources`。安装包需联网获取并校验 Microsoft 官方 x64 Visual C++ Redistributable；打包脚本用 Inno Setup 编译可选目录安装器，默认创建桌面快捷方式，并默认做静默安装/卸载冒烟检查。输出位于 `dist\windows\`；使用 `-SkipInstallerSmokeTest` 可跳过本机安装器冒烟测试。
+
+### 发布到 GitHub Releases
+
+1. 打包完成后打开仓库的 [Releases](https://github.com/Huomnh/HoH-music/releases)，选择 **Draft a new release**。
+2. 标签填写 `v0.1.0-beta.1`，目标分支选择 `main`，上传 `dist/windows/HoH-music-Setup-0.1.0-beta.1-Windows-x64.exe`。
+3. 发布前可用 `Get-FileHash .\dist\windows\HoH-music-Setup-0.1.0-beta.1-Windows-x64.exe -Algorithm SHA256` 生成校验值，并粘贴到 Release 说明。
+4. 点击 **Publish release** 后，用户即可从 Releases 页面下载；源码仓库仍不提交 `dist/` 安装包。
 
 如果本机无法下载 MediaKit 构建资产，可先执行 `scripts/prepare-media-kit.ps1`，详见 [Windows 预览与构建指南](docs/Windows预览指南.md)。
 

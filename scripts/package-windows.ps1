@@ -101,6 +101,23 @@ if (-not $SkipInstallerSmokeTest) {
   if (-not (Test-Path -LiteralPath (Join-Path $smokeDir 'hoh_music.exe') -PathType Leaf)) {
     throw 'Smoke test did not install the application executable to the chosen custom directory.'
   }
+  # An elevated Inno Setup install targets the common desktop; a per-user
+  # install can target the current user's desktop. Accept either location.
+  $desktopShortcutCandidates = @(
+    (Join-Path ([Environment]::GetFolderPath('Desktop')) 'HoH music.lnk'),
+    (Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'HoH music.lnk')
+  )
+  $desktopShortcut = $desktopShortcutCandidates |
+    Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+    Select-Object -First 1
+  if (-not $desktopShortcut) {
+    throw 'Smoke test did not create the default desktop shortcut.'
+  }
+  $shortcutShell = New-Object -ComObject WScript.Shell
+  $shortcutTarget = $shortcutShell.CreateShortcut($desktopShortcut).TargetPath
+  if ($shortcutTarget -ne (Join-Path $smokeDir 'hoh_music.exe')) {
+    throw "Desktop shortcut points to an unexpected target: $shortcutTarget"
+  }
   $requiredInstalledFiles = @(
     'LICENSE',
     'licenses\THIRD-PARTY-LICENSES.md',
