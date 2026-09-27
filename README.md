@@ -10,6 +10,18 @@ HoH music 是基于 Flutter/Dart 的音乐播放器。当前可运行和验收�
 
 项目仓库：[github.com/Huomnh/HoH-music](https://github.com/Huomnh/HoH-music)；欢迎提交 Issue 反馈 Bug 或功能建议。
 
+## 开源项目致谢
+
+感谢以下开源项目及其维护者提供的工具、数据和设计启发。HoH music 使用的运行时依赖与参考范围见[开源项目与协议清单](docs/开源项目与协议清单.md)；除明确标注的依赖/数据接入外，下列产品仅作为功能或交互参考，不代表复制或嵌入了它们的代码。
+
+- [Flutter](https://github.com/flutter/flutter)、[Riverpod](https://github.com/rrousselGit/riverpod)、[MediaKit](https://github.com/media-kit/media-kit)：应用 UI、状态管理与音频播放基础。
+- [LX Music Desktop](https://github.com/lyswhut/lx-music-desktop)：自定义音源协议与音源接入逻辑参考；感谢其公开的音源接口文档和社区生态。
+- [AMLL TTML DB](https://github.com/amll-dev/amll-ttml-db)：逐词歌词数据接入；感谢项目维护者提供开放的 TTML 歌词资源与接入说明。
+- [Any Listen](https://github.com/any-listen/any-listen)、[Namida](https://github.com/namidaco/namida)、[Particle Music](https://github.com/AfalpHy/ParticleMusic)、[Coriander Player](https://github.com/Ferry-200/coriander_player)：音乐库、下载、跨平台架构及桌面播放器交互参考，感谢作者分享实现经验。
+- [sonic-topography](https://github.com/yin-yizhen/sonic-topography)、[AMLL TTML Tool](https://github.com/amll-dev/amll-ttml-tool)：歌词时间轴、可视化与 TTML 格式研究参考，感谢相关项目的探索和文档。
+
+HoH music 不隶属于上述项目。第三方依赖、数据和媒体资源按各自适用的许可证及服务条款使用；完整清单和合规说明请查阅[开源项目与协议清单](docs/开源项目与协议清单.md)。
+
 ## 界面预览
 
 以下图片来自当前项目的页面预览，后续 UI 更新会同步维护 `docs/preview/`：
