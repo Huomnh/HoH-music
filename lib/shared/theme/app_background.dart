@@ -21,6 +21,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../widgets/widget_kit/background_scenes.dart';
+import 'app_accent.dart';
 import 'performance_tier.dart';
 
 /// 背景场景种类。
@@ -344,8 +345,7 @@ class BackgroundLayer extends StatelessWidget {
         definition['followTheme'] != true) {
       return null;
     }
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return <Color>[scheme.primary, scheme.secondary, scheme.tertiary];
+    return AppAccent.of(context).sceneColors;
   }
 }
 

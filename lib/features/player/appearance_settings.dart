@@ -1334,7 +1334,11 @@ class CoverStageSection extends ConsumerWidget {
   }
 }
 
-/// RGB 色轮：选择主题基准色，玻璃自动使用互补色。
+/// RGB 色轮：外圈选色相，内方块选饱和度和明度，玻璃自动使用互补色。
+///
+/// 旧实现只有固定饱和度/明度的色相环，因此黑、白、灰永远选不出来。
+/// 现在内方块的左上角是白色，右上角是当前色相的高饱和色，底部渐变到
+/// 黑色，覆盖完整 HSV 取色范围且不依赖平台原生颜色选择器。
 class _RgbColorWheel extends StatelessWidget {
   const _RgbColorWheel({
     required this.selected,
@@ -1358,7 +1362,7 @@ class _RgbColorWheel extends StatelessWidget {
           onPanUpdate: (DragUpdateDetails details) =>
               _pick(details.localPosition),
           child: CustomPaint(
-            size: const Size.square(92),
+            size: const Size.square(120),
             painter: _RgbWheelPainter(current),
           ),
         ),
@@ -1379,6 +1383,10 @@ class _RgbColorWheel extends StatelessWidget {
                   fontSize: 11,
                 ),
               ),
+              const Text(
+                '外圈色相 · 内部饱和度/明度（支持黑、白、灰）',
+                style: TextStyle(color: AppColors.textTertiary, fontSize: 10.5),
+              ),
               TextButton(
                 onPressed: onReset,
                 style: TextButton.styleFrom(
@@ -1396,12 +1404,31 @@ class _RgbColorWheel extends StatelessWidget {
   }
 
   void _pick(Offset point) {
-    const Offset center = Offset(46, 46);
+    const Offset center = Offset(60, 60);
     final Offset delta = point - center;
-    if (delta.distance < 16 || delta.distance > 46) return;
-    final double hue =
-        (math.atan2(delta.dy, delta.dx) * 180 / math.pi + 90) % 360;
-    onChanged(HSVColor.fromAHSV(1, hue, 0.82, 0.95).toColor());
+    final double distance = delta.distance;
+    final HSVColor hsv = HSVColor.fromColor(selected ?? accent.primary);
+
+    // 色相环：保留当前的饱和度和明度，只改变色相。
+    if (distance >= 43 && distance <= 58) {
+      final double hue =
+          (math.atan2(delta.dy, delta.dx) * 180 / math.pi + 90) % 360;
+      onChanged(HSVColor.fromAHSV(1, hue, hsv.saturation, hsv.value).toColor());
+      return;
+    }
+
+    // 内部 SV 方块：左=低饱和/白，右=高饱和；上=高明度，下=黑。
+    const Rect square = Rect.fromLTWH(28, 28, 64, 64);
+    if (!square.contains(point)) return;
+    final double saturation = ((point.dx - square.left) / square.width).clamp(
+      0.0,
+      1.0,
+    );
+    final double value = (1 - (point.dy - square.top) / square.height).clamp(
+      0.0,
+      1.0,
+    );
+    onChanged(HSVColor.fromAHSV(1, hsv.hue, saturation, value).toColor());
   }
 }
 
@@ -1413,24 +1440,71 @@ class _RgbWheelPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final Offset center = size.center(Offset.zero);
     final double radius = size.shortestSide / 2;
+    final HSVColor selectedHsv = HSVColor.fromColor(selected);
     final Paint ring = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 14
+      ..strokeWidth = 12
       ..shader = SweepGradient(
         colors: <Color>[
           for (int i = 0; i <= 12; i++)
-            HSVColor.fromAHSV(1, i * 30.0, 0.9, 0.95).toColor(),
+            HSVColor.fromAHSV(1, i * 30.0, 0.92, 0.98).toColor(),
         ],
-      ).createShader(Rect.fromCircle(center: center, radius: radius - 8));
-    canvas.drawCircle(center, radius - 8, ring);
+      ).createShader(Rect.fromCircle(center: center, radius: radius - 7));
+    canvas.drawCircle(center, radius - 7, ring);
 
-    final Paint core = Paint()..color = selected;
-    canvas.drawCircle(center, radius - 24, core);
-    final Paint outline = Paint()
+    const Rect square = Rect.fromLTWH(28, 28, 64, 64);
+    final Color hueColor = HSVColor.fromAHSV(
+      1,
+      selectedHsv.hue,
+      1,
+      1,
+    ).toColor();
+    canvas.drawRect(
+      square,
+      Paint()
+        ..shader = const LinearGradient(
+          colors: <Color>[Colors.white, Colors.transparent],
+        ).createShader(square),
+    );
+    canvas.drawRect(
+      square,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[Colors.transparent, Colors.black],
+        ).createShader(square),
+    );
+    canvas.drawRect(
+      square,
+      Paint()
+        ..shader = LinearGradient(colors: <Color>[Colors.transparent, hueColor])
+            .createShader(square),
+    );
+
+    final double hueAngle = (selectedHsv.hue - 90) * math.pi / 180;
+    final Offset huePoint =
+        center + Offset(math.cos(hueAngle), math.sin(hueAngle)) * (radius - 7);
+    final Paint hueMarker = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5
+      ..color = Colors.white;
+    canvas.drawCircle(huePoint, 7, hueMarker);
+
+    final Offset svPoint = Offset(
+      square.left + selectedHsv.saturation * square.width,
+      square.top + (1 - selectedHsv.value) * square.height,
+    );
+    final Paint svMarker = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
-      ..color = Colors.white.withValues(alpha: 0.86);
-    canvas.drawCircle(center, radius - 24, outline);
+      ..color = Colors.white;
+    canvas.drawCircle(svPoint, 5, svMarker);
+    final Paint svShadow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = Colors.black.withValues(alpha: 0.72);
+    canvas.drawCircle(svPoint, 7, svShadow);
   }
 
   @override

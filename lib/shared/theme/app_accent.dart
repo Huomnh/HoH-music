@@ -12,6 +12,7 @@ library;
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -30,6 +31,9 @@ class AppAccent {
     required this.secondary,
     required this.tertiary,
     required this.source,
+    this.scenePrimary,
+    this.sceneSecondary,
+    this.sceneTertiary,
   });
 
   /// 主强调色：滑块、开关、选中描边。
@@ -43,6 +47,21 @@ class AppAccent {
 
   /// 这套色来自哪里（用于设置页显示）。
   final String source;
+
+  /// 给动态背景使用的原始色。
+  ///
+  /// UI 强调色需要保证文字和控件可读，不能简单等于封面上的黑/白/灰；
+  /// 背景则应该保留封面的真实色相。因此这里把“UI 安全色”和“场景色”
+  /// 分开，黑白封面也不会被强行伪装成高饱和色。
+  final Color? scenePrimary;
+  final Color? sceneSecondary;
+  final Color? sceneTertiary;
+
+  List<Color> get sceneColors => <Color>[
+    scenePrimary ?? primary,
+    sceneSecondary ?? secondary,
+    sceneTertiary ?? tertiary,
+  ];
 
   /// 读取当前生效的强调色（等价于 `AccentScope.of`）。
   ///
@@ -103,10 +122,9 @@ class AppAccent {
   /// 从一张图片里推出一套强调色。
   ///
   /// 做法：把图片解码成 48×48 的小图（不是原图，省内存也够准），
-  /// 按色相分桶统计，桶内评分 = 像素数 × 饱和度权重，
-  /// 取分数最高的三个**不同色相**的桶，再统一提亮到适合当强调色的明度。
-  ///
-  /// 全黑 / 全白的图会拿不到有效桶，这时返回 null，调用方沿用预设色。
+  /// 同时统计 24 个彩色色相桶和 3 个黑/灰/白中性桶。彩色桶使用压缩后的
+  /// 面积评分，避免一块大面积底色把小面积但有辨识度的辅助色完全挤掉；
+  /// 中性桶则直接参与场景色，保证黑白封面不会回退到默认蓝紫色。
   static Future<AppAccent?> fromImage(String path) async {
     final File file = File(path);
     if (!file.existsSync()) return null;
@@ -139,39 +157,93 @@ class AppAccent {
     if (data == null) return null;
 
     final Uint8List pixels = data.buffer.asUint8List();
-    // 色相分桶：每 15° 一桶
+    // 色相分桶：每 15° 一桶。weight 不直接作为最终排序分数，
+    // 后面会做幂次压缩，降低“占比最大颜色”的支配性。
     final List<double> weight = List<double>.filled(24, 0);
     final List<double> satSum = List<double>.filled(24, 0);
     final List<double> valSum = List<double>.filled(24, 0);
+    final List<double> redSum = List<double>.filled(24, 0);
+    final List<double> greenSum = List<double>.filled(24, 0);
+    final List<double> blueSum = List<double>.filled(24, 0);
     final List<int> count = List<int>.filled(24, 0);
+
+    // 中性桶：0=暗色，1=中灰，2=亮色。
+    final List<double> neutralWeight = List<double>.filled(3, 0);
+    final List<double> neutralRed = List<double>.filled(3, 0);
+    final List<double> neutralGreen = List<double>.filled(3, 0);
+    final List<double> neutralBlue = List<double>.filled(3, 0);
+    double allNeutralWeight = 0;
+    double allNeutralRed = 0;
+    double allNeutralGreen = 0;
+    double allNeutralBlue = 0;
 
     for (int i = 0; i + 3 < pixels.length; i += 4) {
       final int a = pixels[i + 3];
       if (a < 128) continue; // 透明像素不算
 
+      final int red = pixels[i];
+      final int green = pixels[i + 1];
+      final int blue = pixels[i + 2];
       final HSVColor hsv = HSVColor.fromColor(
-        Color.fromARGB(255, pixels[i], pixels[i + 1], pixels[i + 2]),
+        Color.fromARGB(255, red, green, blue),
       );
-      // 太暗或太灰的像素对"强调色"没有参考价值
-      if (hsv.value < 0.16 || hsv.saturation < 0.14) continue;
+      final int pixel = i ~/ 4;
+      final int x = pixel % 48;
+      final int y = pixel ~/ 48;
+      // 封面中心通常比边缘更能代表主体，但只做温和加权，避免裁切构图失真。
+      final double centerDistance =
+          math.sqrt(math.pow(x - 23.5, 2) + math.pow(y - 23.5, 2)) / 34.0;
+      final double spatialWeight = (1.12 - centerDistance * 0.22).clamp(
+        0.82,
+        1.12,
+      );
+
+      if (hsv.saturation < 0.14) {
+        final int neutralBucket = hsv.value < 0.22
+            ? 0
+            : hsv.value > 0.78
+            ? 2
+            : 1;
+        final double w = spatialWeight * (0.7 + (1 - hsv.saturation));
+        neutralWeight[neutralBucket] += w;
+        neutralRed[neutralBucket] += red * w;
+        neutralGreen[neutralBucket] += green * w;
+        neutralBlue[neutralBucket] += blue * w;
+        allNeutralWeight += w;
+        allNeutralRed += red * w;
+        allNeutralGreen += green * w;
+        allNeutralBlue += blue * w;
+        continue;
+      }
 
       final int bucket = (hsv.hue / 15).floor().clamp(0, 23);
-      // 明度太高的（接近白）权重压低，避免整张亮图都算到同一个桶
+      // 暗色仍然保留，避免黑底彩字封面被丢掉；接近白色只轻微降权。
       final double w =
-          hsv.saturation * (1.0 - (hsv.value - 0.9).clamp(0.0, 1.0));
+          spatialWeight *
+          (0.2 + hsv.saturation * 0.8) *
+          (0.42 + hsv.value * 0.58);
       weight[bucket] += w;
       satSum[bucket] += hsv.saturation * w;
       valSum[bucket] += hsv.value * w;
+      redSum[bucket] += red * w;
+      greenSum[bucket] += green * w;
+      blueSum[bucket] += blue * w;
       count[bucket]++;
     }
 
+    final List<double> score = List<double>.generate(24, (int i) {
+      if (count[i] < 4 || weight[i] <= 0) return 0;
+      final double saturation = satSum[i] / weight[i];
+      // 面积幂次压缩：大色块仍是主色，但不会吞掉小面积辅助色。
+      return math.pow(weight[i], 0.58).toDouble() * (0.55 + saturation * 0.9);
+    });
     final List<int> ranked = List<int>.generate(24, (int i) => i)
-      ..sort((int a, int b) => weight[b].compareTo(weight[a]));
+      ..sort((int a, int b) => score[b].compareTo(score[a]));
     final List<int> picked = <int>[];
     for (final int bucket in ranked) {
       if (picked.length >= 3) break;
-      if (count[bucket] < 4 || weight[bucket] <= 0) continue;
-      // 与已选色相至少差 45°，保证三个色"看得出来不一样"
+      if (score[bucket] <= 0) continue;
+      // 与已选色相至少差 45°，保证三个色“看得出来不一样”。
       final bool tooClose = picked.any((int p) {
         final int diff = (p - bucket).abs();
         return diff < 3 || diff > 21;
@@ -180,7 +252,63 @@ class AppAccent {
       picked.add(bucket);
     }
 
-    if (picked.isEmpty) return null;
+    Color neutralColor() {
+      if (allNeutralWeight <= 0) return const Color(0xFF555A68);
+      final int dominantBucket = <int>[
+        0,
+        1,
+        2,
+      ].reduce((int a, int b) => neutralWeight[a] >= neutralWeight[b] ? a : b);
+      // 单一黑/灰/白基调占到中性色的大半时保留它；黑白拼贴则使用总体均值。
+      if (neutralWeight[dominantBucket] >= allNeutralWeight * 0.55) {
+        final double weight = neutralWeight[dominantBucket];
+        return Color.fromARGB(
+          255,
+          (neutralRed[dominantBucket] / weight).round().clamp(0, 255),
+          (neutralGreen[dominantBucket] / weight).round().clamp(0, 255),
+          (neutralBlue[dominantBucket] / weight).round().clamp(0, 255),
+        );
+      }
+      return Color.fromARGB(
+        255,
+        (allNeutralRed / allNeutralWeight).round().clamp(0, 255),
+        (allNeutralGreen / allNeutralWeight).round().clamp(0, 255),
+        (allNeutralBlue / allNeutralWeight).round().clamp(0, 255),
+      );
+    }
+
+    Color neutralUiColor(Color color) {
+      final double luminance = color.computeLuminance();
+      if (luminance < 0.18) return const Color(0xFF9AA9D0);
+      if (luminance > 0.82) return const Color(0xFF4D5872);
+      return const Color(0xFFB5C1DE);
+    }
+
+    // 全黑/全白/大面积灰度封面也要返回结果，而不是沿用上一首主题。
+    if (picked.isEmpty) {
+      final Color raw = neutralColor();
+      final Color uiColor = neutralUiColor(raw);
+      final Color secondary = Color.lerp(uiColor, Colors.white, 0.18)!;
+      final Color tertiary = Color.lerp(uiColor, Colors.black, 0.18)!;
+      return AppAccent(
+        primary: uiColor,
+        secondary: secondary,
+        tertiary: tertiary,
+        scenePrimary: raw,
+        sceneSecondary: Color.lerp(raw, Colors.white, 0.12),
+        sceneTertiary: Color.lerp(raw, Colors.black, 0.16),
+        source: source,
+      );
+    }
+
+    Color toScene(int bucket) {
+      return Color.fromARGB(
+        255,
+        (redSum[bucket] / weight[bucket]).round().clamp(0, 255),
+        (greenSum[bucket] / weight[bucket]).round().clamp(0, 255),
+        (blueSum[bucket] / weight[bucket]).round().clamp(0, 255),
+      );
+    }
 
     Color toAccent(int bucket, {required double lightness}) {
       final double sat = (satSum[bucket] / weight[bucket]).clamp(0.45, 1.0);
@@ -202,11 +330,29 @@ class AppAccent {
     final Color tertiary = picked.length > 2
         ? toAccent(picked[2], lightness: 0.72)
         : Color.lerp(primary, secondary, 0.5)!;
+    final Color colorfulScene = toScene(picked[0]);
+    final bool neutralIsDominant = allNeutralWeight > weight[picked[0]] * 1.15;
+    final Color dominantScene = neutralIsDominant
+        ? neutralColor()
+        : colorfulScene;
+    final Color secondaryScene = neutralIsDominant
+        ? colorfulScene
+        : picked.length > 1
+        ? toScene(picked[1])
+        : (allNeutralWeight > 0 ? neutralColor() : colorfulScene);
+    final Color tertiaryScene = neutralIsDominant
+        ? (picked.length > 1 ? toScene(picked[1]) : colorfulScene)
+        : picked.length > 2
+        ? toScene(picked[2])
+        : Color.lerp(dominantScene, secondaryScene, 0.5)!;
 
     return AppAccent(
       primary: primary,
       secondary: secondary,
       tertiary: tertiary,
+      scenePrimary: dominantScene,
+      sceneSecondary: secondaryScene,
+      sceneTertiary: tertiaryScene,
       source: source,
     );
   }
@@ -287,6 +433,9 @@ class AccentController extends Notifier<AppAccent> {
         primary: customTheme,
         secondary: complementary,
         tertiary: Color.lerp(customTheme, complementary, 0.5)!,
+        scenePrimary: customTheme,
+        sceneSecondary: complementary,
+        sceneTertiary: Color.lerp(customTheme, complementary, 0.5),
         source: 'RGB 色轮',
       );
       _resolved = accent;
@@ -429,6 +578,9 @@ class _AnimatedAccentScopeState extends State<AnimatedAccentScope>
       primary: Color.lerp(a.primary, b.primary, t)!,
       secondary: Color.lerp(a.secondary, b.secondary, t)!,
       tertiary: Color.lerp(a.tertiary, b.tertiary, t)!,
+      scenePrimary: Color.lerp(a.scenePrimary, b.scenePrimary, t),
+      sceneSecondary: Color.lerp(a.sceneSecondary, b.sceneSecondary, t),
+      sceneTertiary: Color.lerp(a.sceneTertiary, b.sceneTertiary, t),
       source: b.source,
     );
   }
