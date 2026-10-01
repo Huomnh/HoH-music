@@ -163,6 +163,7 @@ class ThemeBundle {
   static String _backgroundFileStem(BackgroundKind kind) => switch (kind) {
     BackgroundKind.liquidBloom => 'liquid_bloom',
     BackgroundKind.deepTide => 'deep_tide',
+    BackgroundKind.inkFold => 'ink_fold',
     BackgroundKind.custom => 'custom',
   };
 

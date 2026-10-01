@@ -70,6 +70,12 @@ class AppAccent {
         tertiary: Color(0xFFE85D75),
         source: '暖霞流光',
       ),
+      BackgroundKind.inkFold => const AppAccent(
+        primary: Color(0xFF78B7FF),
+        secondary: Color(0xFF4DE0C1),
+        tertiary: Color(0xFFED86B8),
+        source: '墨潮折影',
+      ),
       // 自定义图片：先用液态流光色，等提取结果回来再替换
       BackgroundKind.custom => const AppAccent(
         primary: Color(0xFF7C8CFF),
