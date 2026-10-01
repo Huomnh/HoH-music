@@ -23,7 +23,7 @@ powershell -ExecutionPolicy Bypass -File scripts\package-windows.ps1
 
 运行 `scripts/package-windows.ps1`（需安装 Inno Setup 6）会重新构建 Release、剔除生成 bundle 中的 `assets/audio` 与 `assets/sources`，再将项目根目录的 `music音源/*.js` 作为普通文件放入安装目录的同名文件夹；随后下载并验证 Microsoft 官方 x64 VC++ Redistributable 签名、编译安装器，并在 `build/packaging/smoke-install` 做自定义路径的静默安装/卸载冒烟测试。成功后安装器和 SHA-256 信息位于 `dist/windows/`（哈希打印到终端）。此冒烟测试不等于干净电脑的首次启动、音频设备、音源网络及全部功能验收。
 
-本次 `0.1.0` 正式版产物为 `dist/windows/HoH-music-Setup-0.1.0-Windows-x64.exe`，大小 47.14 MiB，SHA-256 为 `CD503E897248D37310CFD9B7D01AEB50B3A383ED4D981BF567EFC020DCD3B99A`。安装器已通过可选目录安装、桌面快捷方式和卸载冒烟验证；当前未签名。
+本次 `0.1.0` 正式版产物为 `dist/windows/HoH-music-Setup-0.1.0-Windows-x64.exe`，大小 47.14 MiB，SHA-256 为 `81846EB8507F63AAF613D27CCD33C17AE0720F4D1CDF9FD1A7B68D2B43C9666C`。安装器已通过可选目录安装、桌面快捷方式和卸载冒烟验证；当前未签名。
 
 ## MediaKit 本机构建资源
 

@@ -345,7 +345,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     final bool settingsOpen = _view != _MainView.player;
     final PlayerControlLayout controlLayout =
         ref.watch(playerControlLayoutProvider).value ??
-        PlayerControlLayout.sidebar;
+        PlayerControlLayout.bottom;
     final bool bottomControls = controlLayout == PlayerControlLayout.bottom;
 
     ref.listen<PlayerUiState>(playerControllerProvider, (

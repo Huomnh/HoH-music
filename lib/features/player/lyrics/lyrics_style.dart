@@ -193,7 +193,7 @@ class LyricsStyle {
     this.spacing = LyricLineSpacing.normal,
     this.autoScroll = true,
     this.activeScale = 1.25,
-    this.align = LyricAlign.right,
+    this.align = LyricAlign.center,
     this.layout = LyricsLayoutMode.albumVoice,
     this.liftStyle = LyricLiftStyle.vertical,
     this.staggerStyle = LyricStaggerStyle.smooth,
@@ -205,7 +205,7 @@ class LyricsStyle {
     this.lyricsOpacity = 1.0,
     this.subtitleOpacity = 0.62,
     this.showTranslation = true,
-    this.desktopOverlay = true,
+    this.desktopOverlay = false,
     this.overlayLocked = false,
   });
 
@@ -403,7 +403,7 @@ class LyricsStyleController extends AsyncNotifier<LyricsStyle> {
         autoScroll: prefs.getBool(_autoScrollKey) ?? true,
         align: LyricAlign.values.firstWhere(
           (LyricAlign a) => a.name == alignName,
-          orElse: () => LyricAlign.right,
+          orElse: () => LyricAlign.center,
         ),
         layout: LyricsLayoutMode.fromStoredName(layoutName),
         liftStyle: LyricLiftStyle.values.firstWhere(
@@ -437,7 +437,7 @@ class LyricsStyleController extends AsyncNotifier<LyricsStyle> {
           1.0,
         ),
         showTranslation: prefs.getBool(_showTranslationKey) ?? true,
-        desktopOverlay: prefs.getBool(_overlayKey) ?? true,
+        desktopOverlay: prefs.getBool(_overlayKey) ?? false,
         overlayLocked: prefs.getBool(_overlayLockedKey) ?? false,
       );
     } catch (error) {

@@ -42,7 +42,7 @@ class PlayerUiState {
     this.playing = false,
     this.buffering = false,
     this.duration = Duration.zero,
-    this.volume = 0.8,
+    this.volume = PlaybackPrefs.defaultVolume,
     this.completed = false,
     this.mode = PlaybackMode.repeatAll,
     this.audioDevice = const AudioDevice('auto', ''),

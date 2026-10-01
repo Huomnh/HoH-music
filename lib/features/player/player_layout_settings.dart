@@ -19,7 +19,7 @@ enum PlayerControlLayout {
 
   static PlayerControlLayout fromStoredName(String? name) => values.firstWhere(
     (PlayerControlLayout value) => value.name == name,
-    orElse: () => PlayerControlLayout.sidebar,
+    orElse: () => PlayerControlLayout.bottom,
   );
 }
 

@@ -96,16 +96,16 @@ void main() {
 
     // Windows 标题由原生 Win32 非客户区绘制，Flutter widget tree 中不再重复绘制。
     // 队列为空时应显示空状态而不是假数据。
-    // 默认摄影机词幕只在左侧控制台显示空播放状态。
+    // 默认使用当前确认的底部控制区显示空播放状态。
     expect(find.text('未在播放'), findsOneWidget);
 
-    // 控制台在侧边栏顶部：黑胶 + 走带按键都在
+    // 控制区仍包含黑胶与走带按键
     expect(find.byType(VinylRecord), findsOneWidget);
     expect(find.byTooltip('上一首'), findsOneWidget);
     expect(find.byTooltip('下一首'), findsOneWidget);
     expect(find.byTooltip('播放模式：列表循环（点击切换）'), findsOneWidget);
     expect(find.byTooltip('展开歌词页'), findsOneWidget);
-    expect(find.byTooltip('关闭桌面歌词'), findsOneWidget);
+    expect(find.byTooltip('打开桌面歌词'), findsOneWidget);
   });
 
   testWidgets('HoH 歌词模式共用统一时间轴', (WidgetTester tester) async {
@@ -588,12 +588,12 @@ void main() {
         .setLayout(LyricsLayoutMode.ripple);
     await tester.pump();
     expect(find.byType(LyricsScene), findsOneWidget);
-    // 黑胶在侧边栏顶部的控制台里（0.0.22 从 76 收到 60，用户嫌整体太大）
+    // 黑胶在底部控制区里，横向布局会比侧栏版本收窄（0.0.22 从 76 收到 60）。
     expect(find.byType(VinylRecord), findsOneWidget);
     final VinylRecord disc = tester.widget<VinylRecord>(
       find.byType(VinylRecord),
     );
-    expect(disc.size, 60);
+    expect(disc.size, inInclusiveRange(48, 60));
 
     // 转速放慢了：1.8 秒一圈在真机大小下像加载动画，用户嫌快（0.0.21）
     expect(VinylRecord.secondsPerTurn, greaterThanOrEqualTo(5.0));
@@ -909,8 +909,8 @@ void main() {
       lyricsStyleProvider.notifier,
     );
 
-    // 当前产品默认开启桌面歌词，但测试环境不会触碰原生窗口。
-    expect(container.read(lyricsStyleProvider).value?.desktopOverlay, isTrue);
+    // 正式版默认关闭桌面歌词；测试环境不会触碰原生窗口。
+    expect(container.read(lyricsStyleProvider).value?.desktopOverlay, isFalse);
 
     await controller.setDesktopOverlay(true);
     await _settle(tester);

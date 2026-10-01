@@ -905,7 +905,7 @@ class PlayerControlLayoutSection extends ConsumerWidget {
     final AppAccent accent = AppAccent.of(context);
     final PlayerControlLayout layout =
         ref.watch(playerControlLayoutProvider).value ??
-        PlayerControlLayout.sidebar;
+        PlayerControlLayout.bottom;
     final PlayerControlLayoutController controller = ref.read(
       playerControlLayoutProvider.notifier,
     );

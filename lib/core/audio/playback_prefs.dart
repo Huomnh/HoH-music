@@ -44,11 +44,20 @@ enum PlaybackMode {
 /// 播放器偏好。
 @immutable
 class PlaybackPrefs {
+  /// 正式版首次启动默认音量，取自当前用户的有效播放设置（约 64.43%）。
+  static const double defaultVolume = 0.6442953020134227;
+
+  /// 正式版首次启动默认播放模式。
+  static const PlaybackMode defaultMode = PlaybackMode.repeatAll;
+
+  /// 正式版首次启动默认输出设备，交给系统选择当前默认设备。
+  static const String defaultAudioDeviceName = 'auto';
+
   /// 创建偏好。
   const PlaybackPrefs({
-    this.volume = 0.8,
-    this.mode = PlaybackMode.repeatAll,
-    this.audioDeviceName = 'auto',
+    this.volume = defaultVolume,
+    this.mode = defaultMode,
+    this.audioDeviceName = defaultAudioDeviceName,
   });
 
   /// 音量（0~1）。
@@ -73,7 +82,7 @@ class PlaybackPrefs {
       if (modeName != null) {
         mode = PlaybackMode.values.firstWhere(
           (PlaybackMode m) => m.name == modeName,
-          orElse: () => PlaybackMode.repeatAll,
+          orElse: () => defaultMode,
         );
       } else if (prefs.getBool('playback.shuffle') ?? false) {
         mode = PlaybackMode.shuffle;
@@ -81,14 +90,18 @@ class PlaybackPrefs {
         mode = switch (prefs.getString('playback.replay')) {
           'all' => PlaybackMode.repeatAll,
           'one' => PlaybackMode.repeatOne,
-          _ => PlaybackMode.repeatAll,
+          _ => defaultMode,
         };
       }
 
       return PlaybackPrefs(
-        volume: (prefs.getDouble('playback.volume') ?? 0.8).clamp(0.0, 1.0),
+        volume: (prefs.getDouble('playback.volume') ?? defaultVolume).clamp(
+          0.0,
+          1.0,
+        ),
         mode: mode,
-        audioDeviceName: prefs.getString('playback.audioDevice') ?? 'auto',
+        audioDeviceName:
+            prefs.getString('playback.audioDevice') ?? defaultAudioDeviceName,
       );
     } catch (error) {
       debugPrint('[PlaybackPrefs] 读取失败（用默认值）：$error');

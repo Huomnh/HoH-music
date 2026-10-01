@@ -143,34 +143,31 @@ class BlurConfig {
 
   /// 按档位返回推荐参数。
   ///
-  /// 性能取舍说明（针对"GPU 占用偏高"的优化）：
-  /// - 模糊 sigma 从 24 降到 16。sigma 与采样开销是平方级关系，
-  ///   16 在视觉上仍然明显，但采样量只有 24 的约 44%。
-  /// - 默认关闭旋转高光。它是每帧重绘的描边，三块面板叠加时开销可观。
-  /// 用户可以在设置面板里逐项打开，按自己机器的性能取舍。
+  /// 高端档位使用正式版外观设置中的当前参数作为首次启动基线；
+  /// 用户之后的调整仍会通过 [GlassOverrides] 单独持久化，不会被档位检测覆盖。
   factory BlurConfig.forTier(PerformanceTier tier) {
     return switch (tier) {
       PerformanceTier.high => const BlurConfig(
         tier: PerformanceTier.high,
-        blurSigma: 1,
+        blurSigma: 16,
         highlightEnabled: true,
         neonStrength: 1.0,
         animationsEnabled: true,
-        sweepEnabled: true,
+        sweepEnabled: false,
         glowStrength: 1.0,
-        tintOpacity: 1.0,
+        tintOpacity: 0.0,
         glassColor: Colors.white,
-        glassSaturation: 0.01,
-        glassTone: 1.0,
-        glassThickness: 14,
-        frostIntensity: 5,
-        refractiveIndex: 1.16,
-        chromaticAberration: 0.006,
-        lightAngle: 0.785,
-        lightIntensity: 0.8,
-        ambientStrength: 0.2,
-        liquidSaturation: 1.18,
-        fakeGlassRefraction: 2.0,
+        glassSaturation: 0.08,
+        glassTone: 0.08,
+        glassThickness: 6.63594470046083,
+        frostIntensity: 0.48387096774196914,
+        refractiveIndex: 1.0311059907834095,
+        chromaticAberration: 0.0030414746543778797,
+        lightAngle: 1.4259804147465434,
+        lightIntensity: 0.37788018433179704,
+        ambientStrength: 0.09331797235023052,
+        liquidSaturation: 1.4210829493087553,
+        fakeGlassRefraction: 4.082949308755761,
       ),
       PerformanceTier.balanced => const BlurConfig(
         tier: PerformanceTier.balanced,
@@ -600,7 +597,7 @@ class GlassOverridesController extends Notifier<GlassOverrides> {
   Future<void> _save() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('appearance.blurSigma', state.blurSigma ?? 16);
-    await prefs.setDouble('appearance.tintOpacity', state.tintOpacity ?? 1);
+    await prefs.setDouble('appearance.tintOpacity', state.tintOpacity ?? 0);
     await prefs.setDouble('appearance.glowStrength', state.glowStrength ?? 1);
     await prefs.setDouble(
       'appearance.glassSaturation',
@@ -609,36 +606,39 @@ class GlassOverridesController extends Notifier<GlassOverrides> {
     await prefs.setDouble('appearance.glassTone', state.glassTone ?? 0.08);
     await prefs.setDouble(
       'appearance.glassThickness',
-      state.glassThickness ?? 10,
+      state.glassThickness ?? 6.63594470046083,
     );
     await prefs.setDouble(
       'appearance.frostIntensity',
-      state.frostIntensity ?? 4,
+      state.frostIntensity ?? 0.48387096774196914,
     );
     await prefs.setDouble(
       'appearance.refractiveIndex',
-      state.refractiveIndex ?? 1.12,
+      state.refractiveIndex ?? 1.0311059907834095,
     );
     await prefs.setDouble(
       'appearance.chromaticAberration',
-      state.chromaticAberration ?? 0.003,
+      state.chromaticAberration ?? 0.0030414746543778797,
     );
-    await prefs.setDouble('appearance.lightAngle', state.lightAngle ?? 0.785);
+    await prefs.setDouble(
+      'appearance.lightAngle',
+      state.lightAngle ?? 1.4259804147465434,
+    );
     await prefs.setDouble(
       'appearance.lightIntensity',
-      state.lightIntensity ?? 0.55,
+      state.lightIntensity ?? 0.37788018433179704,
     );
     await prefs.setDouble(
       'appearance.ambientStrength',
-      state.ambientStrength ?? 0.16,
+      state.ambientStrength ?? 0.09331797235023052,
     );
     await prefs.setDouble(
       'appearance.liquidSaturation',
-      state.liquidSaturation ?? 1.12,
+      state.liquidSaturation ?? 1.4210829493087553,
     );
     await prefs.setDouble(
       'appearance.fakeGlassRefraction',
-      state.fakeGlassRefraction ?? 1.5,
+      state.fakeGlassRefraction ?? 4.082949308755761,
     );
     await prefs.setBool('appearance.sweepEnabled', state.sweepEnabled ?? false);
     await prefs.setBool(

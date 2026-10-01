@@ -4,6 +4,8 @@ HoH music 是一个以 Flutter/Dart 编写的 Windows 桌面音乐播放器。`0
 
 > 当前版本：`0.1.0+1`。当前正式发布目标为 Windows x64；其他平台仍保留共享业务代码，但尚未完成独立构建与验收。
 
+正式版首次启动默认使用：音量约 64.43%、列表循环、系统自动选择输出通道；外观默认采用当前确认的液态流光、底部控制区、居中歌词、关闭桌面歌词、开启动画，玻璃参数为模糊 16、填充透明度 0%、厚度约 6.64、磨砂约 0.48、折射率约 1.031、色散约 0.003、光照角约 1.426 弧度、光照强度约 0.378、环境光约 0.093、背景饱和度约 1.421、回退折射约 4.083；用户之后的调整会持久化保存。
+
 项目仓库：[github.com/Huomnh/HoH-music](https://github.com/Huomnh/HoH-music)。欢迎通过 Issue 反馈 Bug 或提出功能建议。
 
 本项目采用 **GNU GPL 第 3 版（GPL-3.0-only）**，完整条款见根目录 [LICENSE](LICENSE)。第三方依赖、参考项目、音源协议和媒体服务条款请查看[开源项目与协议清单](docs/开源项目与协议清单.md)。
@@ -62,7 +64,7 @@ HoH music 不隶属于上述项目。具体改编范围和许可证入口见[开
 - `flutter test --reporter compact`：91 项通过；测试环境会输出 MediaKit 原生依赖不可用提示，但测试本身通过。
 - `flutter build windows --release`：正式版构建通过。
 - Windows 安装器：Release bundle、许可证、第三方清单、`music音源` 文件夹、可选安装目录和默认桌面快捷方式均纳入打包检查。
-- 当前安装器：`dist/windows/HoH-music-Setup-0.1.0-Windows-x64.exe`，47.14 MiB，SHA-256：`CD503E897248D37310CFD9B7D01AEB50B3A383ED4D981BF567EFC020DCD3B99A`。
+- 当前安装器：`dist/windows/HoH-music-Setup-0.1.0-Windows-x64.exe`，47.14 MiB，SHA-256：`81846EB8507F63AAF613D27CCD33C17AE0720F4D1CDF9FD1A7B68D2B43C9666C`。
 - 安装器已完成自选目录安装/卸载冒烟测试；未签名，干净 Windows 用户环境的长时间播放验收仍属于发布后的边界。
 - 已执行自定义目录安装/卸载冒烟检查；干净电脑首次启动、实际音频设备、在线音源服务和代码签名仍需发布者在目标环境复核。
 - 安装器当前未签名。正式对外分发建议使用可信代码签名证书，减少 Windows SmartScreen 警告。
