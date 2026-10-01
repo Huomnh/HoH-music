@@ -25,13 +25,17 @@ abstract final class AppConstants {
   /// GitHub 仓库地址。仓库创建后填写，发布包和版本说明页共用此值。
   static const String repositoryUrl = 'https://github.com/Huomnh/HoH-music';
 
+  /// 应用 Logo：用于 Flutter 标题栏，并与 Windows runner / 安装器图标保持同源。
+  static const String logoAsset = 'assets/icons/hoh_logo.png';
+
   /// 贡献名单：记录提出建设性功能建议或 Bug 反馈的网友 ID。
-  /// 平台前缀与 ID 一并展示，避免不同平台出现同名时产生歧义。
+  /// 版本说明页按平台合并成一行展示，避免重复书写平台名。
+  static const String contributorPlatform = '抖音';
   static const List<String> contributors = <String>[
-    '抖音：美味蟹堡',
-    '抖音：染乱.',
-    '抖音：huaan',
-    '抖音：采样',
+    '美味蟹堡',
+    '染乱.',
+    'huaan',
+    '采样',
   ];
 
   /// 主题包扩展名（zip 打包：配置 + 预览图 + 资源）。

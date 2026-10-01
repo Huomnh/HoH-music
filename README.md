@@ -10,6 +10,8 @@ HoH music 是基于 Flutter/Dart 的音乐播放器。当前可运行和验收�
 
 项目仓库：[github.com/Huomnh/HoH-music](https://github.com/Huomnh/HoH-music)；欢迎提交 Issue 反馈 Bug 或功能建议。
 
+项目 Logo 位于 `assets/icons/hoh_logo.png`，已接入 Flutter 标题栏；Windows 程序图标、托盘图标和安装器使用同源的圆角 ICO 资源，随构建和打包流程一并生效。
+
 ## 开源项目致谢
 
 感谢以下开源项目及其维护者提供的工具、数据、渲染算法和设计启发。HoH music 使用的运行时依赖、改编代码及许可范围见[开源项目与协议清单](docs/开源项目与协议清单.md)。
@@ -75,7 +77,7 @@ HoH music 不隶属于上述项目。第三方依赖、数据和媒体资源按�
 - `flutter build windows --release`：历史通过，产物为 `build/windows/x64/runner/Release/hoh_music.exe`。
 - Windows 安装器：本地生成于 `dist/windows/HoH-music-Setup-0.1.0-beta.1-Windows-x64.exe`；安装目录可自定义，并默认创建桌面快捷方式。安装包不提交源码仓库，公开下载请使用 [GitHub Releases](https://github.com/Huomnh/HoH-music/releases)。
 - 自动更新：Release 构建启动时检查 GitHub Releases；发现更高版本且存在匹配的 Windows x64 `.exe` 安装包时，显示可关闭的非强制更新提示，并通过系统浏览器打开下载链接。版本说明页也提供手动检查和下载入口；网络失败不会影响旧版本使用。发布命名、版本比较和平台筛选规则见 [自动更新机制](docs/更新机制.md)。
-- 版本说明：显示当前版本、外部 GitHub 反馈链接、非强制更新入口和建设性建议/Bug 反馈贡献名单；当前已记录抖音用户“美味蟹堡、染乱.、huaan、采样”。
+- 版本说明：显示当前版本、外部 GitHub 反馈链接、非强制更新入口和贡献名单；名单以“抖音：美味蟹堡、染乱.、huaan、采样”单行展示，并注明这些是提出建设性功能建议或 Bug 反馈的网友 ID。
 - 安装器当前未签名；正式公开分发建议使用可信代码签名证书，避免 Windows 发布者未知提示。
 - 安装需要管理员确认（VC++ 运行库可能需要系统级安装），安装目录可在向导中修改。
 - 干净机器安装/启动、实际播放和下载验收：尚未完成。

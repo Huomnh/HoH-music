@@ -19,7 +19,7 @@ powershell -ExecutionPolicy Bypass -File scripts\package-windows.ps1
 
 ## Windows 安装包
 
-`packaging/hoh_music.iss` 定义 Inno Setup 安装向导：用户可编辑安装路径，安装整个 Flutter Release 目录（含 DLL、MediaKit/libmpv、QuickJS 和 Flutter assets），创建开始菜单快捷方式，并可选创建桌面快捷方式。安装包内含项目 `LICENSE`、第三方许可证清单、Flutter 资源内的 `NOTICES.Z`，以及独立的 `music音源` 脚本文件夹。用户音乐库和歌曲文件不打包；音源脚本不自动注册/启用，用户安装后可在音源管理中手动导入。安装器需要管理员确认，用于 Program Files 安装和缺失时安装 VC++ 运行库。
+`packaging/hoh_music.iss` 定义 Inno Setup 安装向导：用户可编辑安装路径，安装整个 Flutter Release 目录（含 DLL、MediaKit/libmpv、QuickJS 和 Flutter assets），创建开始菜单快捷方式，并可选创建桌面快捷方式。安装包内含项目 `LICENSE`、第三方许可证清单、Flutter 资源内的 `NOTICES.Z`，以及独立的 `music音源` 脚本文件夹。用户音乐库和歌曲文件不打包；音源脚本不自动注册/启用，用户安装后可在音源管理中手动导入。程序图标、托盘图标和安装器图标统一来自 `assets/icons/hoh_logo.png` 生成的圆角 ICO。安装器需要管理员确认，用于 Program Files 安装和缺失时安装 VC++ 运行库。
 
 运行 `scripts/package-windows.ps1`（需安装 Inno Setup 6）会重新构建 Release、剔除生成 bundle 中的 `assets/audio` 与 `assets/sources`，再将项目根目录的 `music音源/*.js` 作为普通文件放入安装目录的同名文件夹；随后下载并验证 Microsoft 官方 x64 VC++ Redistributable 签名、编译安装器，并在 `build/packaging/smoke-install` 做自定义路径的静默安装/卸载冒烟测试。成功后安装器和 SHA-256 信息位于 `dist/windows/`（哈希打印到终端）。此冒烟测试不等于干净电脑的首次启动、音频设备、音源网络及全部功能验收。
 

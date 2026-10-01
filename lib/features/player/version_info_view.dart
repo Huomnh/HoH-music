@@ -157,13 +157,24 @@ class _ContributorsSection extends StatelessWidget {
         Text(
           contributors.isEmpty
               ? '名单待补充：感谢所有提出建设性功能建议和 Bug 反馈的用户。'
-              : contributors.map((String id) => '• $id').join('\n'),
+              : '${AppConstants.contributorPlatform}：${contributors.join('、')}',
           style: const TextStyle(
             color: AppColors.textTertiary,
             fontSize: 11,
             height: 1.6,
           ),
         ),
+        if (contributors.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 2),
+          const Text(
+            '提出建设性功能建议或 Bug 反馈的网友 ID',
+            style: TextStyle(
+              color: AppColors.textTertiary,
+              fontSize: 10,
+              height: 1.5,
+            ),
+          ),
+        ],
       ],
     );
   }

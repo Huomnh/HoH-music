@@ -777,18 +777,32 @@ class _TitleBar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
           children: <Widget>[
-            Container(
-              width: 16,
-              height: 16,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(4),
-                gradient: LinearGradient(
-                  colors: <Color>[
-                    accent.secondary,
-                    accent.tertiary,
-                    accent.primary,
-                  ],
-                ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Image.asset(
+                AppConstants.logoAsset,
+                width: 18,
+                height: 18,
+                fit: BoxFit.cover,
+                errorBuilder:
+                    (
+                      BuildContext context,
+                      Object error,
+                      StackTrace? stackTrace,
+                    ) {
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: <Color>[
+                              accent.secondary,
+                              accent.tertiary,
+                              accent.primary,
+                            ],
+                          ),
+                        ),
+                        child: const SizedBox(width: 18, height: 18),
+                      );
+                    },
               ),
             ),
             const SizedBox(width: 10),
