@@ -516,6 +516,13 @@ class PlayerEngine {
   /// 音量变化流。
   Stream<double> get volumeStream => player.stream.volume;
 
+  /// 当前输出通道变化流。
+  Stream<AudioDevice> get audioDeviceStream => player.stream.audioDevice;
+
+  /// 系统当前可用的输出通道列表。
+  Stream<List<AudioDevice>> get audioDevicesStream =>
+      player.stream.audioDevices;
+
   /// 播放出错流。
   Stream<String> get errorStream => player.stream.error;
 
@@ -817,6 +824,13 @@ class PlayerEngine {
   /// 设置音量（0~100）。
   Future<void> setVolume(double volume) =>
       player.setVolume(volume.clamp(0, 100));
+
+  /// 切换音频输出通道。
+  ///
+  /// `AudioDevice.auto()` 交给系统选择默认设备；其它设备由 media_kit
+  /// 根据当前平台返回的名称路由到扬声器、耳机或虚拟音频设备。
+  Future<void> setAudioDevice(AudioDevice device) =>
+      player.setAudioDevice(device);
 
   /// 随机播放开关（**自管顺序**，不再用 media_kit 的 shuffle）。
   ///

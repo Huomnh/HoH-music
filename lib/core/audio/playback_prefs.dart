@@ -1,6 +1,6 @@
 /// playback_prefs.dart
 ///
-/// 播放器偏好的持久化：音量 / 随机 / 循环模式。
+/// 播放器偏好的持久化：音量 / 随机 / 循环模式 / 输出通道。
 ///
 /// 都是"用户调过一次就该记住"的东西，用 `shared_preferences`。
 /// 读写全部包在 try/catch 里：测试环境或平台不支持时按默认值走，不影响播放。
@@ -45,13 +45,20 @@ enum PlaybackMode {
 @immutable
 class PlaybackPrefs {
   /// 创建偏好。
-  const PlaybackPrefs({this.volume = 0.8, this.mode = PlaybackMode.repeatAll});
+  const PlaybackPrefs({
+    this.volume = 0.8,
+    this.mode = PlaybackMode.repeatAll,
+    this.audioDeviceName = 'auto',
+  });
 
   /// 音量（0~1）。
   final double volume;
 
   /// 播放模式。
   final PlaybackMode mode;
+
+  /// 输出通道名称；`auto` 表示交给系统选择默认输出设备。
+  final String audioDeviceName;
 
   /// 从磁盘读取；失败返回默认值。
   ///
@@ -81,6 +88,7 @@ class PlaybackPrefs {
       return PlaybackPrefs(
         volume: (prefs.getDouble('playback.volume') ?? 0.8).clamp(0.0, 1.0),
         mode: mode,
+        audioDeviceName: prefs.getString('playback.audioDevice') ?? 'auto',
       );
     } catch (error) {
       debugPrint('[PlaybackPrefs] 读取失败（用默认值）：$error');
@@ -95,6 +103,11 @@ class PlaybackPrefs {
   /// 保存播放模式。
   static Future<void> saveMode(PlaybackMode mode) =>
       _write((SharedPreferences p) => p.setString('playback.mode', mode.name));
+
+  /// 保存输出通道名称。
+  static Future<void> saveAudioDeviceName(String name) => _write(
+    (SharedPreferences p) => p.setString('playback.audioDevice', name),
+  );
 
   static Future<void> _write(
     Future<void> Function(SharedPreferences prefs) action,

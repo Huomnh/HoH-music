@@ -691,6 +691,8 @@ void main() {
     await _settle(tester);
 
     expect(find.text('全局快捷键'), findsOneWidget);
+    expect(find.text('输出通道'), findsOneWidget);
+    expect(find.text('自动选择（系统默认）'), findsOneWidget);
     expect(find.text('启用全局快捷键'), findsOneWidget);
     // 绑定表（只读展示）
     for (final HotkeySpec spec in kHotkeySpecs) {

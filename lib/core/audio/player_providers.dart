@@ -45,6 +45,8 @@ class PlayerUiState {
     this.volume = 0.8,
     this.completed = false,
     this.mode = PlaybackMode.repeatAll,
+    this.audioDevice = const AudioDevice('auto', ''),
+    this.audioDevices = const <AudioDevice>[AudioDevice('auto', '')],
   });
 
   /// 当前队列。
@@ -71,6 +73,12 @@ class PlayerUiState {
   /// 播放模式（顺序 / 列表循环 / 单曲循环 / 随机）。
   final PlaybackMode mode;
 
+  /// 当前输出通道。
+  final AudioDevice audioDevice;
+
+  /// 当前平台可用的输出通道。
+  final List<AudioDevice> audioDevices;
+
   /// 当前曲目。队列为空时为 null。
   Track? get currentTrack {
     if (currentIndex < 0 || currentIndex >= queue.length) return null;
@@ -90,6 +98,8 @@ class PlayerUiState {
     double? volume,
     bool? completed,
     PlaybackMode? mode,
+    AudioDevice? audioDevice,
+    List<AudioDevice>? audioDevices,
   }) {
     return PlayerUiState(
       queue: queue ?? this.queue,
@@ -100,6 +110,8 @@ class PlayerUiState {
       volume: volume ?? this.volume,
       completed: completed ?? this.completed,
       mode: mode ?? this.mode,
+      audioDevice: audioDevice ?? this.audioDevice,
+      audioDevices: audioDevices ?? this.audioDevices,
     );
   }
 }
@@ -152,6 +164,13 @@ class PlayerController extends Notifier<PlayerUiState> {
           // media_kit 的音量是 0~100，UI 统一用 0~1
           (double v) =>
               state = state.copyWith(volume: (v / 100).clamp(0.0, 1.0)),
+        ),
+        _engine.audioDeviceStream.listen(
+          (AudioDevice device) => state = state.copyWith(audioDevice: device),
+        ),
+        _engine.audioDevicesStream.listen(
+          (List<AudioDevice> devices) =>
+              state = state.copyWith(audioDevices: devices),
         ),
       ]);
       _logger('播放状态流已订阅');
@@ -209,8 +228,16 @@ class PlayerController extends Notifier<PlayerUiState> {
     } catch (error) {
       _logger('恢复音量失败（引擎未就绪）：$error');
     }
+    final AudioDevice savedDevice = AudioDevice(prefs.audioDeviceName, '');
+    state = state.copyWith(audioDevice: savedDevice);
+    try {
+      await _engine.setAudioDevice(savedDevice);
+    } catch (error) {
+      _logger('恢复输出通道失败（引擎未就绪或设备不可用）：$error');
+    }
     _logger(
-      '已恢复播放偏好：音量 ${(prefs.volume * 100).round()}% / ${prefs.mode.label}',
+      '已恢复播放偏好：音量 ${(prefs.volume * 100).round()}% / '
+      '${prefs.mode.label} / 输出 ${prefs.audioDeviceName}',
     );
   }
 
@@ -442,6 +469,19 @@ class PlayerController extends Notifier<PlayerUiState> {
     );
 
     await _engine.setVolume(clamped * 100);
+  }
+
+  /// 切换输出通道并持久化设备名称。
+  Future<void> setAudioDevice(AudioDevice device, {bool persist = true}) async {
+    state = state.copyWith(audioDevice: device);
+    if (persist) {
+      unawaited(PlaybackPrefs.saveAudioDeviceName(device.name));
+    }
+    try {
+      await _engine.setAudioDevice(device);
+    } catch (error) {
+      _logger('切换输出通道失败：$error');
+    }
   }
 
   Timer? _volumeSaveTimer;

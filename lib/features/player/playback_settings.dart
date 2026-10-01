@@ -7,7 +7,9 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:media_kit/media_kit.dart' show AudioDevice;
 
+import '../../core/audio/player_providers.dart';
 import '../../core/metadata/cover_art.dart';
 import '../../platforms/windows/global_hotkey_service.dart';
 import '../../shared/theme/app_accent.dart';
@@ -75,6 +77,10 @@ class PlaybackSettingsView extends ConsumerWidget {
                         ),
 
                         const SizedBox(height: 18),
+                        _GroupLabel('输出通道', color: accent.primary),
+                        const AudioOutputSection(),
+
+                        const SizedBox(height: 18),
                         _GroupLabel('全局快捷键', color: accent.primary),
                         const HotkeySettingsSection(),
 
@@ -91,6 +97,105 @@ class PlaybackSettingsView extends ConsumerWidget {
         ),
       ),
       enabled: config.animationsEnabled,
+    );
+  }
+}
+
+/// 系统音频输出通道选择。
+///
+/// 选项由 media_kit 从当前平台动态枚举，默认的“自动选择”适用于没有设备枚举
+/// 能力的 Web 或测试环境；Windows、macOS、Linux 和移动端会显示系统实际设备。
+class AudioOutputSection extends ConsumerWidget {
+  const AudioOutputSection({super.key});
+
+  static String _label(AudioDevice device) {
+    if (device.name == 'auto') return '自动选择（系统默认）';
+    if (device.description.trim().isNotEmpty) return device.description;
+    return device.name;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppAccent accent = AppAccent.of(context);
+    final AudioDevice selected = ref.watch(
+      playerControllerProvider.select(
+        (PlayerUiState state) => state.audioDevice,
+      ),
+    );
+    final List<AudioDevice> detected = ref.watch(
+      playerControllerProvider.select(
+        (PlayerUiState state) => state.audioDevices,
+      ),
+    );
+    final List<AudioDevice> devices = detected.isEmpty
+        ? <AudioDevice>[const AudioDevice('auto', '')]
+        : detected;
+    AudioDevice? value;
+    for (final AudioDevice device in devices) {
+      if (device.name == selected.name) {
+        value = device;
+        break;
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const Text(
+          '选择系统检测到的扬声器、耳机或虚拟音频设备；自动选择最兼容。',
+          style: TextStyle(
+            color: AppColors.textTertiary,
+            fontSize: 10.5,
+            height: 1.5,
+          ),
+        ),
+        const SizedBox(height: 9),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: Colors.black.withValues(alpha: 0.22),
+            border: Border.all(color: accent.primary.withValues(alpha: 0.35)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<AudioDevice>(
+              isExpanded: true,
+              value: value,
+              hint: Text(_label(selected)),
+              icon: Icon(Icons.expand_more_rounded, color: accent.primary),
+              dropdownColor: const Color(0xFF20263B),
+              items: <DropdownMenuItem<AudioDevice>>[
+                for (final AudioDevice device in devices)
+                  DropdownMenuItem<AudioDevice>(
+                    value: device,
+                    child: Text(
+                      _label(device),
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ),
+              ],
+              onChanged: (AudioDevice? device) {
+                if (device == null) return;
+                ref
+                    .read(playerControllerProvider.notifier)
+                    .setAudioDevice(device);
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          devices.length > 1
+              ? '已检测到 ${devices.length} 个输出通道，切换后立即对当前播放生效。'
+              : '当前只提供系统默认通道；连接耳机或音频设备后会自动刷新。',
+          style: const TextStyle(
+            color: AppColors.textTertiary,
+            fontSize: 10,
+            height: 1.4,
+          ),
+        ),
+      ],
     );
   }
 }
