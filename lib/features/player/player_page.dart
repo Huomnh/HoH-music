@@ -22,7 +22,7 @@ library;
 
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
@@ -2122,6 +2122,26 @@ String _formatDuration(Duration d) {
   return '$minutes:${seconds.toString().padLeft(2, '0')}';
 }
 
+const double _progressThumbDiameter = 18;
+
+/// 将进度条命中区域的横坐标映射到与视觉轨道相同的比例。
+///
+/// 视觉轨道在两端为拖拽圆点预留半径，因此点击圆点中心与进度填充末端
+/// 始终重合；外侧留白仍然可以点击到 0%/100%。独立成纯函数，避免侧栏和
+/// 底部控制区因为不同宽度出现“看着在这里、实际跳到那里”的偏移。
+@visibleForTesting
+double progressRatioForTrackPosition({
+  required double dx,
+  required double width,
+}) {
+  final double trackWidth = width > _progressThumbDiameter
+      ? width - _progressThumbDiameter
+      : 0;
+  if (trackWidth <= 0) return 0;
+  final double trackStart = _progressThumbDiameter / 2;
+  return ((dx - trackStart) / trackWidth).clamp(0.0, 1.0).toDouble();
+}
+
 /// 进度条 + 时间。
 class _ProgressBar extends StatelessWidget {
   const _ProgressBar({
@@ -2194,7 +2214,7 @@ class _ProgressTrackState extends State<_ProgressTrack> {
   /// 把本地 x 坐标换算成 0~1 的播放比例。
   void _seekTo(double dx, double width) {
     if (!widget.enabled || width <= 0) return;
-    final double value = (dx / width).clamp(0.0, 1.0);
+    final double value = progressRatioForTrackPosition(dx: dx, width: width);
     setState(() {
       _dragProgress = value;
     });
@@ -2207,6 +2227,9 @@ class _ProgressTrackState extends State<_ProgressTrack> {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double width = constraints.maxWidth;
+        final double trackWidth = width > _progressThumbDiameter
+            ? width - _progressThumbDiameter
+            : 0;
 
         final double targetProgress = _dragProgress ?? widget.progress;
 
@@ -2217,6 +2240,7 @@ class _ProgressTrackState extends State<_ProgressTrack> {
           onEnter: (_) => setState(() => _hovered = true),
           onExit: (_) => setState(() => _hovered = false),
           child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTapDown: (TapDownDetails d) {
               _dragging = true;
               _seekTo(d.localPosition.dx, width);
@@ -2229,88 +2253,103 @@ class _ProgressTrackState extends State<_ProgressTrack> {
               _dragging = false;
               setState(() => _dragProgress = null);
             },
-            onHorizontalDragStart: (_) => _dragging = true,
+            onHorizontalDragStart: (DragStartDetails d) {
+              _dragging = true;
+              _seekTo(d.localPosition.dx, width);
+            },
             onHorizontalDragUpdate: (DragUpdateDetails d) =>
                 _seekTo(d.localPosition.dx, width),
             onHorizontalDragEnd: (_) {
               _dragging = false;
               setState(() => _dragProgress = null);
             },
+            onHorizontalDragCancel: () {
+              _dragging = false;
+              setState(() => _dragProgress = null);
+            },
             child: SizedBox(
-              // 0.0.22：点击/拖动热区从 14 收到 12，控制台整体更紧凑
-              height: 12,
-              child: Center(
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: <Widget>[
-                    Container(
-                      height: 4,
+              width: double.infinity,
+              // 进度条视觉高度仍为 4px，但命中区域扩大到 32px，方便点按
+              // 和拖动；轨道与圆点共用同一套左右内缩，消除视觉/命中错位。
+              height: 32,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: <Widget>[
+                  Positioned(
+                    left: _progressThumbDiameter / 2,
+                    top: 14,
+                    width: trackWidth,
+                    height: 4,
+                    child: Container(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(999),
                         color: Colors.white.withValues(alpha: 0.18),
                       ),
                     ),
-                    AnimatedPositioned(
-                      duration: _dragging
-                          ? Duration.zero
-                          : const Duration(milliseconds: 150),
-                      curve: Curves.easeOutCubic,
-                      left: 0,
-                      right: width * (1 - targetProgress),
-                      top: 4,
-                      height: 4,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(999),
-                          gradient: LinearGradient(
-                            colors: <Color>[
-                              accent.primary,
-                              accent.tertiary,
-                              accent.secondary,
-                            ],
-                          ),
-                          boxShadow: <BoxShadow>[
-                            BoxShadow(
-                              color: accent.primary.withValues(alpha: 0.42),
-                              blurRadius: 7,
-                            ),
+                  ),
+                  AnimatedPositioned(
+                    duration: _dragging
+                        ? Duration.zero
+                        : const Duration(milliseconds: 150),
+                    curve: Curves.easeOutCubic,
+                    left: _progressThumbDiameter / 2,
+                    top: 14,
+                    width: trackWidth * targetProgress,
+                    height: 4,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
+                        gradient: LinearGradient(
+                          colors: <Color>[
+                            accent.primary,
+                            accent.tertiary,
+                            accent.secondary,
                           ],
                         ),
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                            color: accent.primary.withValues(alpha: 0.42),
+                            blurRadius: 7,
+                          ),
+                        ],
                       ),
                     ),
-                    AnimatedPositioned(
-                      duration: _dragging
-                          ? Duration.zero
-                          : const Duration(milliseconds: 150),
-                      curve: Curves.easeOutCubic,
-                      left: (width - 16) * targetProgress,
-                      top: 0,
-                      width: 16,
-                      height: 12,
-                      child: Center(
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 160),
-                          opacity: _hovered || _dragging ? 1 : 0,
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 140),
-                            width: _hovered || _dragging ? 14 : 10,
-                            height: _hovered || _dragging ? 14 : 10,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white,
-                              boxShadow: <BoxShadow>[
-                                BoxShadow(
-                                  color: accent.primary.withValues(alpha: 0.58),
-                                  blurRadius: 9,
-                                ),
-                              ],
-                            ),
+                  ),
+                  AnimatedPositioned(
+                    duration: _dragging
+                        ? Duration.zero
+                        : const Duration(milliseconds: 150),
+                    curve: Curves.easeOutCubic,
+                    left:
+                        _progressThumbDiameter / 2 +
+                        trackWidth * targetProgress -
+                        _progressThumbDiameter / 2,
+                    top: 7,
+                    width: _progressThumbDiameter,
+                    height: _progressThumbDiameter,
+                    child: Center(
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 160),
+                        opacity: _hovered || _dragging ? 1 : 0,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 140),
+                          width: _hovered || _dragging ? 14 : 10,
+                          height: _hovered || _dragging ? 14 : 10,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            boxShadow: <BoxShadow>[
+                              BoxShadow(
+                                color: accent.primary.withValues(alpha: 0.58),
+                                blurRadius: 9,
+                              ),
+                            ],
                           ),
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),

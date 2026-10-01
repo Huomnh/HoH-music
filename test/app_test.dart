@@ -181,6 +181,16 @@ void main() {
     expect(timed[1].progress, 0);
   });
 
+  test('播放进度条的可点击坐标与视觉轨道保持一致', () {
+    expect(progressRatioForTrackPosition(dx: 9, width: 318), 0);
+    expect(
+      progressRatioForTrackPosition(dx: 159, width: 318),
+      closeTo(.5, .001),
+    );
+    expect(progressRatioForTrackPosition(dx: 309, width: 318), 1);
+    expect(progressRatioForTrackPosition(dx: 0, width: 10), 0);
+  });
+
   test('从所有歌曲移除只持久化隐藏 ID，可撤销且不操作磁盘文件', () async {
     final ProviderContainer container = ProviderContainer();
     addTearDown(container.dispose);
