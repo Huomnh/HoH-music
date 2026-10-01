@@ -12,7 +12,10 @@ import '../../core/metadata/cover_art.dart';
 import '../../platforms/windows/global_hotkey_service.dart';
 import '../../shared/theme/app_accent.dart';
 import '../../shared/theme/app_colors.dart';
+import '../../shared/theme/performance_tier.dart';
 import '../../shared/widgets/widget_kit/glass_panel.dart';
+import '../../shared/widgets/motion/hoh_motion.dart';
+import '../../shared/widgets/widget_kit/blur_config_scope.dart';
 import '../library/library_store.dart';
 
 /// 播放设置页。
@@ -29,61 +32,65 @@ class PlaybackSettingsView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final AppAccent accent = AppAccent.of(context);
+    final BlurConfig config = BlurConfigScope.of(context);
     final AsyncValue<StartupBehavior> behavior = ref.watch(
       startupBehaviorProvider,
     );
-    return GlassPanel(
-      borderRadius: BorderRadius.circular(16),
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 20),
-      initialSweepPhase: 0.5,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          const Text('播放设置', style: _sectionLabel),
-          const SizedBox(height: 8),
-          const Text(
-            '管理启动行为、快捷键和封面显示来源。',
-            style: TextStyle(
-              color: AppColors.textTertiary,
-              fontSize: 11.5,
-              height: 1.5,
+    return HoHMotion.enter(
+      GlassPanel(
+        borderRadius: BorderRadius.circular(16),
+        padding: const EdgeInsets.fromLTRB(28, 20, 28, 20),
+        initialSweepPhase: 0.5,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            const Text('播放设置', style: _sectionLabel),
+            const SizedBox(height: 8),
+            const Text(
+              '管理启动行为、快捷键和封面显示来源。',
+              style: TextStyle(
+                color: AppColors.textTertiary,
+                fontSize: 11.5,
+                height: 1.5,
+              ),
             ),
-          ),
-          const SizedBox(height: 18),
+            const SizedBox(height: 18),
 
-          Expanded(
-            child: SingleChildScrollView(
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 880),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      _GroupLabel('启动', color: accent.primary),
-                      _StartupChoice(
-                        behavior: behavior.value ?? StartupBehavior.autoLoad,
-                        accent: accent,
-                        onChanged: (StartupBehavior b) => ref
-                            .read(startupBehaviorProvider.notifier)
-                            .setBehavior(b),
-                      ),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 880),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        _GroupLabel('启动', color: accent.primary),
+                        _StartupChoice(
+                          behavior: behavior.value ?? StartupBehavior.autoLoad,
+                          accent: accent,
+                          onChanged: (StartupBehavior b) => ref
+                              .read(startupBehaviorProvider.notifier)
+                              .setBehavior(b),
+                        ),
 
-                      const SizedBox(height: 18),
-                      _GroupLabel('全局快捷键', color: accent.primary),
-                      const HotkeySettingsSection(),
+                        const SizedBox(height: 18),
+                        _GroupLabel('全局快捷键', color: accent.primary),
+                        const HotkeySettingsSection(),
 
-                      const SizedBox(height: 18),
-                      _GroupLabel('歌曲封面', color: accent.primary),
-                      const CoverSourceSection(),
-                    ],
+                        const SizedBox(height: 18),
+                        _GroupLabel('歌曲封面', color: accent.primary),
+                        const CoverSourceSection(),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
+      enabled: config.animationsEnabled,
     );
   }
 }

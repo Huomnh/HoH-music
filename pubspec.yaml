@@ -66,6 +66,8 @@ dependencies:
   # ── 平台能力（导入音源文件）────────────────────────────────────
   file_picker: ^13.1.0
   liquid_glass_plus: ^0.3.2
+  # 低频页面/卡片入场动效；歌词、进度条、频谱和背景仍由原生 Flutter 渲染。
+  flutter_animate: ^4.5.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

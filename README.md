@@ -59,7 +59,7 @@ HoH music 不隶属于上述项目。第三方依赖、数据和媒体资源按�
 - 切歌：采用目标优先策略，跳到远处歌曲时优先解析目标，随后预解析相邻歌曲。界面使用 HoH music 平台别名：芸音、鹅音、苟音、沃音、菇音；内部协议键保持兼容。
 - 快速跳歌会取消旧目标结果的采用，并复用同一首歌正在进行的匹配请求，避免连续点击时重复请求音源。
 - 待解析歌单的上一首和下一首都会按需匹配目标歌曲，不受底层当前只载入单曲的限制。
-- 液态玻璃：所有 HoH `GlassPanel` 与试用页统一使用 `liquid_glass_plus`；Windows 使用插件 Fake Glass 稳定路径。慢速背景约 8.3fps、主 UI 边框扫光约 16.7fps，并在应用暂停时停止时钟；桌面歌词不再使用玻璃材质。Windows 当前仅提供本地 Debug 预览，GPU 占用仍需在目标设备实测。
+- 液态玻璃：所有 HoH `GlassPanel` 与试用页统一使用 `liquid_glass_plus`；Windows 使用插件 Fake Glass 稳定路径。慢速背景约 8.3fps、主 UI 边框扫光约 16.7fps，并在应用暂停时停止时钟；桌面歌词不再使用玻璃材质。低频页面/设置面板入场统一由 HoH `HoHMotion` 封装的 `flutter_animate` 处理；歌词、进度条、频谱和背景仍使用原生 Flutter，界面动画开关关闭时不会创建低频动画层。Windows 当前仅提供本地 Debug 预览，GPU 占用仍需在目标设备实测。
 - 液态玻璃参数：外观设置支持厚度、磨砂、折射率、色散、光照、环境光、背景饱和度和 Skia 回退折射，并会保存到本地及主题包。
 - QQ 音乐等其他平台 URL适配、私密/登录态歌单、M3U/XSPF 和多端同步尚未实现；当前已支持公开网易云歌单和稳定的 HoH 原生备份格式。
 - Windows 集成：`window_manager` 无边框窗口、HoH 自绘圆角标题栏、单实例唤回、紧凑播放器、桌面歌词、系统托盘、快捷键和系统媒体控制。Windows runner 创建 `WS_POPUP + WS_THICKFRAME` 顶层窗口，`DesktopWindow.setup()` 在首帧前完成无边框配置；Flutter 标题栏负责移动、最小化、最大化/还原、关闭和紧凑入口，`WindowFrameSync`/`DragToResizeArea` 负责圆角外框与边缘缩放。Flutter 3.47.5 的 Windows accessibility bridge 会在动态语义树更新时崩溃，因此 Windows 根组件暂时隔离 Flutter 语义树。窗口关闭时弹出“取消 / 保留后台 / 退出程序”选择：保留后台隐藏主窗口并移除任务栏入口，但保留托盘隐藏图标、播放和桌面歌词；退出程序完成清理后结束进程。托盘不可用时保留直接退出兜底。初始窗口尺寸为 1280×800；紧凑播放器固定为 340×284；播放页歌词槽位会按可用高度自动缩放，翻译和长句不会产生溢出警告。
@@ -69,7 +69,7 @@ HoH music 不隶属于上述项目。第三方依赖、数据和媒体资源按�
 ## Beta 验证状态
 
 - `flutter analyze --no-pub`：通过（2026-10-01，含原生 Win32 标题栏、播放页双布局、页面/紧凑播放器动效、进度条和 Windows 启停链路）。
-- `flutter test --reporter compact`：84 项通过（2026-10-01；测试环境会输出 MediaKit 原生依赖不可用提示，但测试本身通过）。
+- `flutter test --reporter compact`：88 项通过（2026-10-01；含低频动效封装启用/禁用回归测试；测试环境会输出 MediaKit 原生依赖不可用提示，但测试本身通过）。
 - Windows Debug 预览：先运行 `powershell -ExecutionPolicy Bypass -File scripts\patch-smtc-cargokit-hidden-path.ps1`，再运行 `flutter build windows --debug`。该修复处理 `smtc_windows` Cargokit 未使用 `-Force` 遍历隐藏的 AppData 路径的问题。当前回归已验证 HoH 无边框窗口样式（`CAPTION=False`、`POPUP=True`）、圆角外框链路、普通 Debug 进程稳定运行，`--exit-after=8` 退出码为 0 且无残留进程；仍需在干净用户环境验收实际托盘退出、播放和安装器。
 - `flutter build windows --release`：历史通过，产物为 `build/windows/x64/runner/Release/hoh_music.exe`。
 - Windows 安装器：本地生成于 `dist/windows/HoH-music-Setup-0.1.0-beta.1-Windows-x64.exe`；安装目录可自定义，并默认创建桌面快捷方式。安装包不提交源码仓库，公开下载请使用 [GitHub Releases](https://github.com/Huomnh/HoH-music/releases)。

@@ -33,6 +33,7 @@ import '../../shared/theme/custom_fonts.dart';
 import '../../shared/theme/performance_tier.dart';
 import '../../shared/theme/theme_bundle.dart';
 import '../../shared/widgets/widget_kit/glass_panel.dart';
+import '../../shared/widgets/motion/hoh_motion.dart';
 import 'cover_style.dart';
 import 'compact_player_settings.dart';
 import 'lyrics/lyrics_style.dart';
@@ -64,275 +65,281 @@ class AppearanceSettingsView extends ConsumerWidget {
     // 强调色跟随背景：这里读到的颜色正是当前背景算出来的那套
     final AppAccent accent = AppAccent.of(context);
 
-    return GlassPanel(
-      borderRadius: BorderRadius.circular(16),
-      // 与其它面板完全同一套取参方式：改设置时，这块面板本身就是预览
-      blurSigma: config.blurSigma,
-      blurEnabled: config.useBlur,
-      showSweepAt: config.sweepEnabled && config.animationsEnabled,
-      glowOpacity: config.glowStrength,
-      glowColor: config.glowColor,
-      tintOpacity: config.tintOpacity,
-      initialSweepPhase: 0.5,
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          const Text('外观设置', style: _sectionLabel),
-          const SizedBox(height: 8),
-          Text(
-            '背景随时可换；玻璃参数默认跟随性能档位「${config.tier.label}」'
-            '（桌面端自动判定），调整过的项会保持你的取值。',
-            style: const TextStyle(
-              color: AppColors.textTertiary,
-              fontSize: 11.5,
-              height: 1.5,
+    return HoHMotion.enter(
+      GlassPanel(
+        borderRadius: BorderRadius.circular(16),
+        // 与其它面板完全同一套取参方式：改设置时，这块面板本身就是预览
+        blurSigma: config.blurSigma,
+        blurEnabled: config.useBlur,
+        showSweepAt: config.sweepEnabled && config.animationsEnabled,
+        glowOpacity: config.glowStrength,
+        glowColor: config.glowColor,
+        tintOpacity: config.tintOpacity,
+        initialSweepPhase: 0.5,
+        padding: const EdgeInsets.fromLTRB(28, 20, 28, 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            const Text('外观设置', style: _sectionLabel),
+            const SizedBox(height: 8),
+            Text(
+              '背景随时可换；玻璃参数默认跟随性能档位「${config.tier.label}」'
+              '（桌面端自动判定），调整过的项会保持你的取值。',
+              style: const TextStyle(
+                color: AppColors.textTertiary,
+                fontSize: 11.5,
+                height: 1.5,
+              ),
             ),
-          ),
-          const SizedBox(height: 18),
+            const SizedBox(height: 18),
 
-          Expanded(
-            child: SingleChildScrollView(
-              // 切到别的页再回来，滚动位置也能记住
-              // （页面内改设置不会丢位置是靠 GlassPanel 的稳定 key，见那个文件）
-              key: const PageStorageKey<String>('appearance-settings-scroll'),
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: _maxContentWidth),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      _GroupLabel('背景', color: accent.primary),
-                      const BackgroundPicker(),
-                      const SizedBox(height: 18),
+            Expanded(
+              child: SingleChildScrollView(
+                // 切到别的页再回来，滚动位置也能记住
+                // （页面内改设置不会丢位置是靠 GlassPanel 的稳定 key，见那个文件）
+                key: const PageStorageKey<String>('appearance-settings-scroll'),
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      maxWidth: _maxContentWidth,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        _GroupLabel('背景', color: accent.primary),
+                        const BackgroundPicker(),
+                        const SizedBox(height: 18),
 
-                      const _ImportedFontsSection(),
-                      const SizedBox(height: 18),
+                        const _ImportedFontsSection(),
+                        const SizedBox(height: 18),
 
-                      _GroupLabel('主题颜色', color: accent.primary),
-                      _RgbColorWheel(
-                        selected: ref.watch(themeColorProvider),
-                        accent: accent,
-                        onChanged: (Color color) => ref
-                            .read(themeColorProvider.notifier)
-                            .setColor(color),
-                        onReset: () => ref
-                            .read(themeColorProvider.notifier)
-                            .setColor(null),
-                      ),
-                      const SizedBox(height: 8),
-                      _ThemeBundleActions(
-                        accent: accent,
-                        onExport: () => _exportTheme(context, ref),
-                        onImport: () => _importTheme(context, ref),
-                      ),
-                      const SizedBox(height: 18),
+                        _GroupLabel('主题颜色', color: accent.primary),
+                        _RgbColorWheel(
+                          selected: ref.watch(themeColorProvider),
+                          accent: accent,
+                          onChanged: (Color color) => ref
+                              .read(themeColorProvider.notifier)
+                              .setColor(color),
+                          onReset: () => ref
+                              .read(themeColorProvider.notifier)
+                              .setColor(null),
+                        ),
+                        const SizedBox(height: 8),
+                        _ThemeBundleActions(
+                          accent: accent,
+                          onExport: () => _exportTheme(context, ref),
+                          onImport: () => _importTheme(context, ref),
+                        ),
+                        const SizedBox(height: 18),
 
-                      _GroupLabel('播放页布局', color: accent.primary),
-                      const PlayerControlLayoutSection(),
-                      const SizedBox(height: 18),
+                        _GroupLabel('播放页布局', color: accent.primary),
+                        const PlayerControlLayoutSection(),
+                        const SizedBox(height: 18),
 
-                      _CompactCornerSection(accent: accent),
-                      const SizedBox(height: 18),
+                        _CompactCornerSection(accent: accent),
+                        const SizedBox(height: 18),
 
-                      _GroupLabel('歌词', color: accent.primary),
-                      const LyricsStyleSection(),
-                      const SizedBox(height: 18),
+                        _GroupLabel('歌词', color: accent.primary),
+                        const LyricsStyleSection(),
+                        const SizedBox(height: 18),
 
-                      _GroupLabel('封面黑胶', color: accent.primary),
-                      const CoverStageSection(),
-                      const SizedBox(height: 18),
+                        _GroupLabel('封面黑胶', color: accent.primary),
+                        const CoverStageSection(),
+                        const SizedBox(height: 18),
 
-                      _GroupLabel('Liquid Glass Plus', color: accent.primary),
-                      _SliderRow(
-                        accent: accent,
-                        label: '玻璃染色强度',
-                        hint: '${(config.tintOpacity * 100).round()}%',
-                        value: config.tintOpacity,
-                        max: 1,
-                        onChanged: controller.setTintOpacity,
-                      ),
-                      _SliderRow(
-                        accent: accent,
-                        label: '玻璃厚度',
-                        hint: '${config.glassThickness.toStringAsFixed(1)} px',
-                        value: config.glassThickness,
-                        max: 30,
-                        onChanged: controller.setGlassThickness,
-                      ),
-                      _SliderRow(
-                        accent: accent,
-                        label: '磨砂强度',
-                        hint: config.frostIntensity.toStringAsFixed(1),
-                        value: config.frostIntensity,
-                        max: 20,
-                        onChanged: controller.setFrostIntensity,
-                      ),
-                      _SliderRow(
-                        accent: accent,
-                        label: '折射率',
-                        hint: config.refractiveIndex.toStringAsFixed(3),
-                        value: config.refractiveIndex,
-                        min: 1,
-                        max: 1.5,
-                        onChanged: controller.setRefractiveIndex,
-                      ),
-                      _SliderRow(
-                        accent: accent,
-                        label: '色散强度',
-                        hint: config.chromaticAberration.toStringAsFixed(3),
-                        value: config.chromaticAberration,
-                        max: 0.03,
-                        onChanged: controller.setChromaticAberration,
-                      ),
-                      _SliderRow(
-                        accent: accent,
-                        label: '光照角度',
-                        hint:
-                            '${(config.lightAngle * 180 / 3.1415926535).round()}°',
-                        value: config.lightAngle,
-                        max: 6.283,
-                        onChanged: controller.setLightAngle,
-                      ),
-                      _SliderRow(
-                        accent: accent,
-                        label: '光照强度',
-                        hint: config.lightIntensity.toStringAsFixed(2),
-                        value: config.lightIntensity,
-                        max: 2,
-                        onChanged: controller.setLightIntensity,
-                      ),
-                      _SliderRow(
-                        accent: accent,
-                        label: '环境光',
-                        hint: config.ambientStrength.toStringAsFixed(2),
-                        value: config.ambientStrength,
-                        max: 1,
-                        onChanged: controller.setAmbientStrength,
-                      ),
-                      _SliderRow(
-                        accent: accent,
-                        label: '背景饱和度倍率',
-                        hint: config.liquidSaturation.toStringAsFixed(2),
-                        value: config.liquidSaturation,
-                        min: 0.5,
-                        max: 2,
-                        onChanged: controller.setLiquidSaturation,
-                      ),
-                      _SliderRow(
-                        accent: accent,
-                        label: 'Skia 回退折射',
-                        hint: config.fakeGlassRefraction.toStringAsFixed(1),
-                        value: config.fakeGlassRefraction,
-                        max: 8,
-                        onChanged: controller.setFakeGlassRefraction,
-                      ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: () => showLiquidGlassPlusPreview(context),
-                        icon: const Icon(Icons.science_outlined, size: 16),
-                        label: const Text('试用 liquid_glass_plus 液态玻璃'),
-                      ),
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6),
-                        child: Text(
-                          '试用面板与主界面使用同一套插件参数。',
-                          style: TextStyle(
-                            color: AppColors.textTertiary,
-                            fontSize: 10.5,
+                        _GroupLabel('Liquid Glass Plus', color: accent.primary),
+                        _SliderRow(
+                          accent: accent,
+                          label: '玻璃染色强度',
+                          hint: '${(config.tintOpacity * 100).round()}%',
+                          value: config.tintOpacity,
+                          max: 1,
+                          onChanged: controller.setTintOpacity,
+                        ),
+                        _SliderRow(
+                          accent: accent,
+                          label: '玻璃厚度',
+                          hint:
+                              '${config.glassThickness.toStringAsFixed(1)} px',
+                          value: config.glassThickness,
+                          max: 30,
+                          onChanged: controller.setGlassThickness,
+                        ),
+                        _SliderRow(
+                          accent: accent,
+                          label: '磨砂强度',
+                          hint: config.frostIntensity.toStringAsFixed(1),
+                          value: config.frostIntensity,
+                          max: 20,
+                          onChanged: controller.setFrostIntensity,
+                        ),
+                        _SliderRow(
+                          accent: accent,
+                          label: '折射率',
+                          hint: config.refractiveIndex.toStringAsFixed(3),
+                          value: config.refractiveIndex,
+                          min: 1,
+                          max: 1.5,
+                          onChanged: controller.setRefractiveIndex,
+                        ),
+                        _SliderRow(
+                          accent: accent,
+                          label: '色散强度',
+                          hint: config.chromaticAberration.toStringAsFixed(3),
+                          value: config.chromaticAberration,
+                          max: 0.03,
+                          onChanged: controller.setChromaticAberration,
+                        ),
+                        _SliderRow(
+                          accent: accent,
+                          label: '光照角度',
+                          hint:
+                              '${(config.lightAngle * 180 / 3.1415926535).round()}°',
+                          value: config.lightAngle,
+                          max: 6.283,
+                          onChanged: controller.setLightAngle,
+                        ),
+                        _SliderRow(
+                          accent: accent,
+                          label: '光照强度',
+                          hint: config.lightIntensity.toStringAsFixed(2),
+                          value: config.lightIntensity,
+                          max: 2,
+                          onChanged: controller.setLightIntensity,
+                        ),
+                        _SliderRow(
+                          accent: accent,
+                          label: '环境光',
+                          hint: config.ambientStrength.toStringAsFixed(2),
+                          value: config.ambientStrength,
+                          max: 1,
+                          onChanged: controller.setAmbientStrength,
+                        ),
+                        _SliderRow(
+                          accent: accent,
+                          label: '背景饱和度倍率',
+                          hint: config.liquidSaturation.toStringAsFixed(2),
+                          value: config.liquidSaturation,
+                          min: 0.5,
+                          max: 2,
+                          onChanged: controller.setLiquidSaturation,
+                        ),
+                        _SliderRow(
+                          accent: accent,
+                          label: 'Skia 回退折射',
+                          hint: config.fakeGlassRefraction.toStringAsFixed(1),
+                          value: config.fakeGlassRefraction,
+                          max: 8,
+                          onChanged: controller.setFakeGlassRefraction,
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(
+                          onPressed: () => showLiquidGlassPlusPreview(context),
+                          icon: const Icon(Icons.science_outlined, size: 16),
+                          label: const Text('试用 liquid_glass_plus 液态玻璃'),
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.only(top: 6),
+                          child: Text(
+                            '试用面板与主界面使用同一套插件参数。',
+                            style: TextStyle(
+                              color: AppColors.textTertiary,
+                              fontSize: 10.5,
+                            ),
                           ),
                         ),
-                      ),
 
-                      const SizedBox(height: 12),
-                      _GroupLabel('边框高光', color: accent.primary),
-                      _SliderRow(
-                        accent: accent,
-                        label: '高光强度',
-                        hint: '${(config.glowStrength * 100).round()}%',
-                        value: config.glowStrength.clamp(0.0, 1.0),
-                        max: 1.0,
-                        onChanged: controller.setGlowStrength,
-                      ),
-                      _SwitchRow(
-                        accent: accent,
-                        label: '边框高光流动',
-                        hint: '边框本身被照亮并绕行；固定 14 秒一圈',
-                        value: config.sweepEnabled,
-                        onChanged: controller.setSweep,
-                      ),
-                      const SizedBox(height: 10),
-                      _GlowColorPicker(
-                        selected: config.glowColor,
-                        accent: accent,
-                        onChanged: controller.setGlowColor,
-                      ),
+                        const SizedBox(height: 12),
+                        _GroupLabel('边框高光', color: accent.primary),
+                        _SliderRow(
+                          accent: accent,
+                          label: '高光强度',
+                          hint: '${(config.glowStrength * 100).round()}%',
+                          value: config.glowStrength.clamp(0.0, 1.0),
+                          max: 1.0,
+                          onChanged: controller.setGlowStrength,
+                        ),
+                        _SwitchRow(
+                          accent: accent,
+                          label: '边框高光流动',
+                          hint: '边框本身被照亮并绕行；固定 14 秒一圈',
+                          value: config.sweepEnabled,
+                          onChanged: controller.setSweep,
+                        ),
+                        const SizedBox(height: 10),
+                        _GlowColorPicker(
+                          selected: config.glowColor,
+                          accent: accent,
+                          onChanged: controller.setGlowColor,
+                        ),
 
-                      const SizedBox(height: 12),
-                      _GroupLabel('开关', color: accent.primary),
-                      _SwitchRow(
-                        accent: accent,
-                        label: '玻璃效果',
-                        hint: '液态玻璃模糊。关掉后用纯色半透明代替，最省 GPU',
-                        value: config.useBlur,
-                        onChanged: (bool on) =>
-                            controller.setBlurSigma(on ? 16 : 0),
-                      ),
-                      _SwitchRow(
-                        accent: accent,
-                        label: '界面动画',
-                        hint: '关闭后所有过渡立即生效',
-                        value: config.animationsEnabled,
-                        onChanged: controller.setAnimations,
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        _GroupLabel('开关', color: accent.primary),
+                        _SwitchRow(
+                          accent: accent,
+                          label: '玻璃效果',
+                          hint: '液态玻璃模糊。关掉后用纯色半透明代替，最省 GPU',
+                          value: config.useBlur,
+                          onChanged: (bool on) =>
+                              controller.setBlurSigma(on ? 16 : 0),
+                        ),
+                        _SwitchRow(
+                          accent: accent,
+                          label: '界面动画',
+                          hint: '关闭后所有过渡立即生效',
+                          value: config.animationsEnabled,
+                          onChanged: controller.setAnimations,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
 
-          const SizedBox(height: 12),
-          const Divider(color: AppColors.divider, height: 1),
-          const SizedBox(height: 12),
+            const SizedBox(height: 12),
+            const Divider(color: AppColors.divider, height: 1),
+            const SizedBox(height: 12),
 
-          // ── 底部操作行（与面板同一套排版）────────────────────────
-          Row(
-            children: <Widget>[
-              TextButton.icon(
-                onPressed: overrides.isEmpty
-                    ? null
-                    : () {
-                        controller.resetAll();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('已恢复为档位默认值'),
-                            duration: Duration(seconds: 2),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                icon: const Icon(Icons.restart_alt_rounded, size: 15),
-                label: const Text('恢复默认'),
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.neonCyan,
-                  textStyle: const TextStyle(fontSize: 12.5),
-                ),
-              ),
-              const Spacer(),
-              if (!overrides.isEmpty)
-                const Text(
-                  '已自定义',
-                  style: TextStyle(
-                    color: AppColors.neonMagenta,
-                    fontSize: 11.5,
+            // ── 底部操作行（与面板同一套排版）────────────────────────
+            Row(
+              children: <Widget>[
+                TextButton.icon(
+                  onPressed: overrides.isEmpty
+                      ? null
+                      : () {
+                          controller.resetAll();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('已恢复为档位默认值'),
+                              duration: Duration(seconds: 2),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.restart_alt_rounded, size: 15),
+                  label: const Text('恢复默认'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.neonCyan,
+                    textStyle: const TextStyle(fontSize: 12.5),
                   ),
                 ),
-            ],
-          ),
-        ],
+                const Spacer(),
+                if (!overrides.isEmpty)
+                  const Text(
+                    '已自定义',
+                    style: TextStyle(
+                      color: AppColors.neonMagenta,
+                      fontSize: 11.5,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
+      enabled: config.animationsEnabled,
     );
   }
 

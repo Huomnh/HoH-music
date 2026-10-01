@@ -59,6 +59,10 @@ Future<void> _pumpApp(WidgetTester tester) async {
 /// 推进动画若干帧，替代 `pumpAndSettle`。
 Future<void> _settle(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 400));
+  // flutter_animate 在页面异步重建后可能把零延迟启动任务排到当前帧之后；
+  // 再泵一帧把该任务消费掉，避免测试拆树时留下 FakeTimer。
+  await tester.pump();
+  await tester.pump();
 }
 
 void main() {
