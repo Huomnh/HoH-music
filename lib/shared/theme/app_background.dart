@@ -55,6 +55,7 @@ Map<String, Object?> builtInBackgroundDefinition(BackgroundKind kind) {
       'version': 1,
       'renderer': 'liquid-bloom',
       'speed': 1.0,
+      'followTheme': true,
       'colors': <String>['0xFF5D7CFF', '0xFFFF78C8', '0xFF47E5C2'],
     },
     BackgroundKind.deepTide => <String, Object?>{
@@ -298,6 +299,7 @@ class BackgroundLayer extends StatelessWidget {
       BackgroundKind.liquidBloom => LiquidBloomScene(
         animated: animated,
         definition: selection.dynamicDefinition,
+        themeColors: _themeColors(context, selection.effectiveKind),
       ),
       BackgroundKind.deepTide => LiquidBloomScene(
         animated: animated,
@@ -333,6 +335,17 @@ class BackgroundLayer extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  List<Color>? _themeColors(BuildContext context, BackgroundKind kind) {
+    final Map<String, Object?> definition =
+        selection.dynamicDefinition ?? builtInBackgroundDefinition(kind);
+    if (kind != BackgroundKind.liquidBloom ||
+        definition['followTheme'] != true) {
+      return null;
+    }
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return <Color>[scheme.primary, scheme.secondary, scheme.tertiary];
   }
 }
 

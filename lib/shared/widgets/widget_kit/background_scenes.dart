@@ -8,10 +8,16 @@ import 'package:flutter/material.dart';
 
 /// 液态流光：三团低饱和渐变光缓慢漂移，约 8.3fps。
 class LiquidBloomScene extends StatefulWidget {
-  const LiquidBloomScene({super.key, this.animated = true, this.definition});
+  const LiquidBloomScene({
+    super.key,
+    this.animated = true,
+    this.definition,
+    this.themeColors,
+  });
 
   final bool animated;
   final Map<String, Object?>? definition;
+  final List<Color>? themeColors;
 
   @override
   State<LiquidBloomScene> createState() => _LiquidBloomSceneState();
@@ -81,17 +87,24 @@ class _LiquidBloomSceneState extends State<LiquidBloomScene>
   @override
   Widget build(BuildContext context) => RepaintBoundary(
     child: CustomPaint(
-      painter: _LiquidBloomPainter(_progress, widget.definition),
+      // 主题色由 MaterialApp 的 AnimatedTheme 逐帧下发，绘制层只消费
+      // 当前帧的三色，不额外创建高频动画控制器。
+      painter: _LiquidBloomPainter(
+        _progress,
+        widget.definition,
+        widget.themeColors,
+      ),
       size: Size.infinite,
     ),
   );
 }
 
 class _LiquidBloomPainter extends CustomPainter {
-  const _LiquidBloomPainter(this.progress, this.definition);
+  const _LiquidBloomPainter(this.progress, this.definition, this.themeColors);
 
   final double progress;
   final Map<String, Object?>? definition;
+  final List<Color>? themeColors;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -150,12 +163,14 @@ class _LiquidBloomPainter extends CustomPainter {
         .clamp(0.1, 4.0)
         .toDouble();
     final double phase = progress * math.pi * 2 * speed;
-    final List<Color> colors = (definition?['colors'] is List)
-        ? (definition!['colors'] as List)
-              .map((Object? value) => _color(value))
-              .whereType<Color>()
-              .toList()
-        : const <Color>[];
+    final List<Color> colors =
+        themeColors ??
+        ((definition?['colors'] is List)
+            ? (definition!['colors'] as List)
+                  .map((Object? value) => _color(value))
+                  .whereType<Color>()
+                  .toList()
+            : const <Color>[]);
     Color colorAt(int index, Color fallback) =>
         colors.length > index ? colors[index] : fallback;
 
@@ -315,7 +330,9 @@ class _LiquidBloomPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_LiquidBloomPainter oldDelegate) =>
-      oldDelegate.progress != progress || oldDelegate.definition != definition;
+      oldDelegate.progress != progress ||
+      oldDelegate.definition != definition ||
+      oldDelegate.themeColors != themeColors;
 
   static Color? _color(Object? value) {
     final String text = '$value';

@@ -97,9 +97,11 @@ class HoHMusicApp extends ConsumerWidget {
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: _buildDarkTheme(accent, fonts.uiFamily ?? 'KirakaraMaru'),
+      themeAnimationDuration: const Duration(milliseconds: 820),
+      themeAnimationCurve: Curves.easeInOutCubic,
       // 把渲染参数与强调色下发到整棵子树：
       // 玻璃面板据此决定模糊 / 高光 / 动效，控件据此决定强调色
-      home: AccentScope(
+      home: AnimatedAccentScope(
         accent: accent,
         child: BlurConfigScope(config: config, child: home),
       ),

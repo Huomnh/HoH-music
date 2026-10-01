@@ -19,6 +19,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/metadata/cover_art.dart';
 import 'app_background.dart';
 
 /// 一套强调色。
@@ -110,8 +111,22 @@ class AppAccent {
     final File file = File(path);
     if (!file.existsSync()) return null;
 
+    return fromBytes(await file.readAsBytes(), source: '自定义图片');
+  }
+
+  /// 从已经获得的封面字节取色。
+  ///
+  /// 播放页的当前封面可能来自音频内嵌图片、缓存或网络，直接处理字节
+  /// 可以避免为了主题取色再次写入临时文件。取色仍只解码成 48×48，
+  /// 不会把原图长期保留在主题状态中。
+  static Future<AppAccent?> fromBytes(
+    Uint8List bytes, {
+    String source = '专辑封面',
+  }) async {
+    if (bytes.isEmpty) return null;
+
     final ui.Codec codec = await ui.instantiateImageCodec(
-      await file.readAsBytes(),
+      bytes,
       targetWidth: 48,
       targetHeight: 48,
     );
@@ -192,7 +207,7 @@ class AppAccent {
       primary: primary,
       secondary: secondary,
       tertiary: tertiary,
-      source: '自定义图片',
+      source: source,
     );
   }
 
@@ -248,7 +263,8 @@ class ThemeColorController extends Notifier<Color?> {
   }
 }
 
-/// 强调色控制器：内置场景走预设表，自定义图片走取色。
+/// 强调色控制器：内置场景走预设表；液态流光模式跟随当前专辑封面取色；
+/// 自定义图片背景继续从图片里取色。
 class AccentController extends Notifier<AppAccent> {
   /// 每次重建 +1，用来丢弃过期的取色结果。
   int _generation = 0;
@@ -267,28 +283,49 @@ class AccentController extends Notifier<AppAccent> {
           .withSaturation((hsv.saturation * 0.9).clamp(0.25, 1.0))
           .withValue(0.86)
           .toColor();
-      return AppAccent(
+      final AppAccent accent = AppAccent(
         primary: customTheme,
         secondary: complementary,
         tertiary: Color.lerp(customTheme, complementary, 0.5)!,
         source: 'RGB 色轮',
       );
+      _resolved = accent;
+      return accent;
+    }
+
+    if (selection.effectiveKind == BackgroundKind.liquidBloom) {
+      // currentCoverProvider 已经负责内嵌封面 / 缓存 / 网络来源和去重，
+      // 这里仅消费它的结果，不重新请求图片。
+      final AsyncValue<Uint8List?> currentCover = ref.watch(
+        currentCoverProvider,
+      );
+      final Uint8List? bytes = currentCover.asData?.value;
+      if (bytes != null) {
+        unawaited(_extractBytes(bytes, generation));
+      }
+      // 切歌后先保持上一首的颜色，直到新封面取色完成；避免先闪回默认
+      // 蓝紫色，再跳到新颜色。
+      return _resolved ?? preset;
     }
 
     if (selection.effectiveKind == BackgroundKind.custom &&
         selection.hasCustomImage) {
-      unawaited(_extract(selection.customImagePath!, generation, preset));
+      unawaited(_extract(selection.customImagePath!, generation));
     }
+    _resolved = preset;
     return preset;
   }
 
-  Future<void> _extract(String path, int generation, AppAccent fallback) async {
+  AppAccent? _resolved;
+
+  Future<void> _extract(String path, int generation) async {
     try {
       final AppAccent? extracted = await AppAccent.fromImage(path);
       // 期间用户又换了背景 / provider 已销毁 → 丢弃这次结果
       if (!ref.mounted || generation != _generation || extracted == null) {
         return;
       }
+      _resolved = extracted;
       state = extracted;
       debugPrint(
         '[Accent] 从图片取色：primary=#${extracted.primary.toARGB32().toRadixString(16)}',
@@ -296,6 +333,104 @@ class AccentController extends Notifier<AppAccent> {
     } catch (error) {
       debugPrint('[Accent] 取色失败，沿用默认强调色：$error');
     }
+  }
+
+  Future<void> _extractBytes(Uint8List bytes, int generation) async {
+    try {
+      final AppAccent? extracted = await AppAccent.fromBytes(bytes);
+      if (!ref.mounted || generation != _generation || extracted == null) {
+        return;
+      }
+      _resolved = extracted;
+      state = extracted;
+      debugPrint(
+        '[Accent] 从专辑封面取色：primary=#${extracted.primary.toARGB32().toRadixString(16)}',
+      );
+    } catch (error) {
+      debugPrint('[Accent] 专辑封面取色失败，沿用当前强调色：$error');
+    }
+  }
+}
+
+/// 让当前强调色在切歌/切背景时平滑过渡，而不是整棵界面瞬间换色。
+class AnimatedAccentScope extends StatefulWidget {
+  const AnimatedAccentScope({
+    super.key,
+    required this.accent,
+    required this.child,
+    this.duration = const Duration(milliseconds: 820),
+  });
+
+  final AppAccent accent;
+  final Widget child;
+  final Duration duration;
+
+  @override
+  State<AnimatedAccentScope> createState() => _AnimatedAccentScopeState();
+}
+
+class _AnimatedAccentScopeState extends State<AnimatedAccentScope>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late AppAccent _from;
+  late AppAccent _to;
+
+  @override
+  void initState() {
+    super.initState();
+    _from = widget.accent;
+    _to = widget.accent;
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget.duration,
+      value: 1,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant AnimatedAccentScope oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.duration != widget.duration) {
+      _controller.duration = widget.duration;
+    }
+    if (oldWidget.accent == widget.accent) return;
+
+    final double progress = Curves.easeInOutCubic.transform(_controller.value);
+    _from = _lerpAccent(_from, _to, progress);
+    _to = widget.accent;
+    _controller.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      child: widget.child,
+      builder: (BuildContext context, Widget? child) {
+        final double progress = Curves.easeInOutCubic.transform(
+          _controller.value,
+        );
+        return AccentScope(
+          accent: _lerpAccent(_from, _to, progress),
+          child: child!,
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  static AppAccent _lerpAccent(AppAccent a, AppAccent b, double t) {
+    return AppAccent(
+      primary: Color.lerp(a.primary, b.primary, t)!,
+      secondary: Color.lerp(a.secondary, b.secondary, t)!,
+      tertiary: Color.lerp(a.tertiary, b.tertiary, t)!,
+      source: b.source,
+    );
   }
 }
 
