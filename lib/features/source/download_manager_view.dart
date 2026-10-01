@@ -26,14 +26,22 @@ class DownloadManagerView extends ConsumerWidget {
 
   Future<void> _locate(String path) async {
     if (path.isEmpty) return;
-    final File file = File(path);
-    if (!await file.exists()) return;
+    // 定位使用任务记录中的最终保存路径，而不是当前默认下载目录。
+    // 文件可能已经被用户手动删除，但历史记录仍然存在；此时仍打开
+    // 原记录的父目录，不能让 Explorer 因目标不存在而回退到“文档”。
+    final File file = File(path).absolute;
+    final Directory directory = file.parent;
+    if (!await directory.exists()) return;
     if (Platform.isWindows) {
-      await Process.run('explorer.exe', <String>['/select,${file.path}']);
+      // 直接传父目录比 `/select,` 更稳定：Explorer 对带空格/中文的
+      // `/select,` 参数在部分 Windows 版本会静默打开默认目录。
+      await Process.start('explorer.exe', <String>[
+        directory.path,
+      ], mode: ProcessStartMode.detached);
     } else if (Platform.isMacOS) {
       await Process.run('open', <String>['-R', file.path]);
     } else if (Platform.isLinux) {
-      await Process.run('xdg-open', <String>[file.parent.path]);
+      await Process.run('xdg-open', <String>[directory.path]);
     }
   }
 
