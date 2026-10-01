@@ -163,7 +163,6 @@ class ThemeBundle {
   static String _backgroundFileStem(BackgroundKind kind) => switch (kind) {
     BackgroundKind.liquidBloom => 'liquid_bloom',
     BackgroundKind.deepTide => 'deep_tide',
-    BackgroundKind.animeCandy => 'anime_candy',
     BackgroundKind.custom => 'custom',
   };
 
@@ -184,18 +183,25 @@ class ThemeBundle {
     final Map<Object?, Object?> map = raw is Map
         ? raw
         : const <Object?, Object?>{};
-    final BackgroundKind kind = BackgroundKind.values.firstWhere(
+    final String? kindName = map['kind']?.toString();
+    final BackgroundKind parsedKind = BackgroundKind.values.firstWhere(
       (BackgroundKind item) => item.name == map['kind'],
       orElse: () => BackgroundKind.liquidBloom,
     );
+    final Object? rawDefinition = map['dynamicDefinition'];
+    final Map<String, Object?>? definition = rawDefinition is Map
+        ? rawDefinition.map(
+            (Object? key, Object? value) => MapEntry(key.toString(), value),
+          )
+        : null;
+    final bool removedAnime =
+        kindName == 'animeCandy' || definition?['renderer'] == 'anime-candy';
     return BackgroundSelection(
-      kind: kind,
+      kind: removedAnime ? BackgroundKind.liquidBloom : parsedKind,
       customImagePath: map['customImagePath']?.toString(),
-      dynamicDefinition: map['dynamicDefinition'] is Map
-          ? (map['dynamicDefinition'] as Map<Object?, Object?>).map(
-              (Object? key, Object? value) => MapEntry(key.toString(), value),
-            )
-          : null,
+      dynamicDefinition: removedAnime
+          ? builtInBackgroundDefinition(BackgroundKind.liquidBloom)
+          : definition,
     );
   }
 
