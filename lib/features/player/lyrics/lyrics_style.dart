@@ -90,16 +90,97 @@ enum LyricAlign {
   };
 }
 
-/// 正在播放页的歌词布局。
+/// HoH 歌词视觉预设。
+///
+/// 名称是 HoH 自己的产品语义，不把用户界面绑定到参考项目名称；
+/// 预设只替换呈现，不替换 HoH 的时间轴、歌词获取或播放后端。
 enum LyricsLayoutMode {
-  /// 原生 Flutter 动态词幕，所有视觉参数在歌词样式中调节。
-  flowline('摄影机词幕'),
-
-  /// 原有的多行滚动歌词列表。
-  scrollingList('滚动列表');
+  starIsland('星屿'),
+  ripple('微澜'),
+  floatingLight('浮光'),
+  stringPulse('弦动'),
+  albumVoice('留声'),
+  afterglow('余晖');
 
   const LyricsLayoutMode(this.label);
 
+  // Compatibility aliases for tests and integrations compiled against the
+  // pre-0.1.0-beta.2 enum. They are not enum values, so they never appear in
+  // the settings UI or in exported mode lists.
+  @Deprecated('Use LyricsLayoutMode.ripple')
+  static const LyricsLayoutMode zeroBitKaraoke = LyricsLayoutMode.ripple;
+  @Deprecated('Use LyricsLayoutMode.starIsland')
+  static const LyricsLayoutMode zeroBitLine = LyricsLayoutMode.starIsland;
+  @Deprecated('Use LyricsLayoutMode.stringPulse')
+  static const LyricsLayoutMode pureMusicWord = LyricsLayoutMode.stringPulse;
+
+  final String label;
+
+  /// 字符重叠波形：只给“微澜”使用，名称不暴露参考项目来源。
+  bool get usesGlyphRipple => this == LyricsLayoutMode.ripple;
+
+  bool get usesWordTiming => switch (this) {
+    LyricsLayoutMode.ripple ||
+    LyricsLayoutMode.stringPulse ||
+    LyricsLayoutMode.albumVoice ||
+    LyricsLayoutMode.afterglow => true,
+    _ => false,
+  };
+
+  /// “留声”把专辑信息与歌词放在同一页。
+  bool get showsAlbumInfo => this == LyricsLayoutMode.albumVoice;
+
+  LyricDisplayMode get displayMode => switch (this) {
+    LyricsLayoutMode.starIsland ||
+    LyricsLayoutMode.floatingLight => LyricDisplayMode.lineByLine,
+    LyricsLayoutMode.afterglow => LyricDisplayMode.enhanced,
+    _ => LyricDisplayMode.wordByWord,
+  };
+
+  /// 兼容此前版本保存的布局名；旧品牌名只在迁移层出现，不再作为当前模式。
+  static LyricsLayoutMode fromStoredName(String? name) {
+    for (final LyricsLayoutMode mode in values) {
+      if (mode.name == name) return mode;
+    }
+    return switch (name) {
+      'zeroBitLine' => LyricsLayoutMode.starIsland,
+      'zeroBitKaraoke' ||
+      'zeroBit' ||
+      'scrollingList' => LyricsLayoutMode.ripple,
+      'pureMusicLine' => LyricsLayoutMode.floatingLight,
+      'pureMusicPlain' => LyricsLayoutMode.floatingLight,
+      'pureMusicEnhanced' => LyricsLayoutMode.afterglow,
+      'pureMusicWord' || 'pureMusic' => LyricsLayoutMode.stringPulse,
+      _ => LyricsLayoutMode.albumVoice,
+    };
+  }
+}
+
+/// HoH painter 的歌词显示方式。
+enum LyricDisplayMode {
+  lineByLine('逐行'),
+  wordByWord('逐字'),
+  enhanced('增强歌词');
+
+  const LyricDisplayMode(this.label);
+  final String label;
+}
+
+/// 当前字的抬升曲线。
+enum LyricLiftStyle {
+  vertical('垂直抬升'),
+  cosine('余弦抬升');
+
+  const LyricLiftStyle(this.label);
+  final String label;
+}
+
+/// 行切换方式。
+enum LyricStaggerStyle {
+  smooth('平滑'),
+  spring('弹性');
+
+  const LyricStaggerStyle(this.label);
   final String label;
 }
 
@@ -113,7 +194,11 @@ class LyricsStyle {
     this.autoScroll = true,
     this.activeScale = 1.25,
     this.align = LyricAlign.right,
-    this.layout = LyricsLayoutMode.flowline,
+    this.layout = LyricsLayoutMode.albumVoice,
+    this.liftStyle = LyricLiftStyle.vertical,
+    this.staggerStyle = LyricStaggerStyle.smooth,
+    this.enableBlur = true,
+    this.enableGlow = false,
     this.fontFamily = LyricFontFamily.kirakara,
     this.weight = LyricWeight.semibold,
     this.letterSpacing = 0.2,
@@ -121,7 +206,6 @@ class LyricsStyle {
     this.subtitleOpacity = 0.62,
     this.showTranslation = true,
     this.desktopOverlay = true,
-    this.overlayFrame = true,
     this.overlayLocked = false,
   });
 
@@ -145,6 +229,15 @@ class LyricsStyle {
   /// 正在播放页使用的歌词布局。
   final LyricsLayoutMode layout;
 
+  /// 当前字抬升曲线、行切换方式和视觉开关。
+  final LyricLiftStyle liftStyle;
+  final LyricStaggerStyle staggerStyle;
+  final bool enableBlur;
+  final bool enableGlow;
+
+  /// 由当前 HoH 预设决定，不另存一份易冲突的设置。
+  LyricDisplayMode get displayMode => layout.displayMode;
+
   final LyricFontFamily fontFamily;
   final LyricWeight weight;
   final double letterSpacing;
@@ -155,13 +248,7 @@ class LyricsStyle {
   /// 是否显示**桌面歌词浮层**（0.0.25：置顶、鼠标穿透的独立小窗）。
   final bool desktopOverlay;
 
-  /// 桌面歌词是否显示**白色玻璃框**（0.0.26）。
-  ///
-  /// 关掉后只剩文字（白色 + 深色描边），适合只想看字的时候。
-  /// 边框高光流动**只在玻璃框显示时**跑。
-  final bool overlayFrame;
-
-  /// 锁定桌面歌词后不再拖动，也不显示玻璃底，桌面区域完全可点击。
+  /// 锁定桌面歌词后不再拖动，桌面区域完全可点击。
   final bool overlayLocked;
 
   /// 浮层字号（比面板大一点才看得清）。
@@ -180,6 +267,10 @@ class LyricsStyle {
     double? activeScale,
     LyricAlign? align,
     LyricsLayoutMode? layout,
+    LyricLiftStyle? liftStyle,
+    LyricStaggerStyle? staggerStyle,
+    bool? enableBlur,
+    bool? enableGlow,
     LyricFontFamily? fontFamily,
     LyricWeight? weight,
     double? letterSpacing,
@@ -187,7 +278,6 @@ class LyricsStyle {
     double? subtitleOpacity,
     bool? showTranslation,
     bool? desktopOverlay,
-    bool? overlayFrame,
     bool? overlayLocked,
   }) {
     return LyricsStyle(
@@ -197,6 +287,10 @@ class LyricsStyle {
       activeScale: activeScale ?? this.activeScale,
       align: align ?? this.align,
       layout: layout ?? this.layout,
+      liftStyle: liftStyle ?? this.liftStyle,
+      staggerStyle: staggerStyle ?? this.staggerStyle,
+      enableBlur: enableBlur ?? this.enableBlur,
+      enableGlow: enableGlow ?? this.enableGlow,
       fontFamily: fontFamily ?? this.fontFamily,
       weight: weight ?? this.weight,
       letterSpacing: letterSpacing ?? this.letterSpacing,
@@ -204,7 +298,6 @@ class LyricsStyle {
       subtitleOpacity: subtitleOpacity ?? this.subtitleOpacity,
       showTranslation: showTranslation ?? this.showTranslation,
       desktopOverlay: desktopOverlay ?? this.desktopOverlay,
-      overlayFrame: overlayFrame ?? this.overlayFrame,
       overlayLocked: overlayLocked ?? this.overlayLocked,
     );
   }
@@ -218,6 +311,10 @@ class LyricsStyle {
       other.activeScale == activeScale &&
       other.align == align &&
       other.layout == layout &&
+      other.liftStyle == liftStyle &&
+      other.staggerStyle == staggerStyle &&
+      other.enableBlur == enableBlur &&
+      other.enableGlow == enableGlow &&
       other.fontFamily == fontFamily &&
       other.weight == weight &&
       other.letterSpacing == letterSpacing &&
@@ -225,7 +322,6 @@ class LyricsStyle {
       other.subtitleOpacity == subtitleOpacity &&
       other.showTranslation == showTranslation &&
       other.desktopOverlay == desktopOverlay &&
-      other.overlayFrame == overlayFrame &&
       other.overlayLocked == overlayLocked;
 
   @override
@@ -236,6 +332,10 @@ class LyricsStyle {
     activeScale,
     align,
     layout,
+    liftStyle,
+    staggerStyle,
+    enableBlur,
+    enableGlow,
     fontFamily,
     weight,
     letterSpacing,
@@ -243,7 +343,6 @@ class LyricsStyle {
     subtitleOpacity,
     showTranslation,
     desktopOverlay,
-    overlayFrame,
     overlayLocked,
   );
 }
@@ -261,6 +360,10 @@ class LyricsStyleController extends AsyncNotifier<LyricsStyle> {
   static const String _autoScrollKey = 'lyrics.autoScroll';
   static const String _alignKey = 'lyrics.align';
   static const String _layoutKey = 'lyrics.layout';
+  static const String _liftStyleKey = 'lyrics.liftStyle';
+  static const String _staggerStyleKey = 'lyrics.staggerStyle';
+  static const String _blurKey = 'lyrics.enableBlur';
+  static const String _glowKey = 'lyrics.enableGlow';
   static const String _fontKey = 'lyrics.fontFamily';
   static const String _kirakaraDefaultKey = 'lyrics.kirakaraDefaultApplied';
   static const String _weightKey = 'lyrics.weight';
@@ -269,7 +372,6 @@ class LyricsStyleController extends AsyncNotifier<LyricsStyle> {
   static const String _subtitleOpacityKey = 'lyrics.subtitleOpacity';
   static const String _showTranslationKey = 'lyrics.showTranslation';
   static const String _overlayKey = 'lyrics.desktopOverlay';
-  static const String _overlayFrameKey = 'lyrics.overlayFrame';
   static const String _overlayLockedKey = 'lyrics.overlayLocked';
 
   @override
@@ -279,6 +381,8 @@ class LyricsStyleController extends AsyncNotifier<LyricsStyle> {
       final String? spacingName = prefs.getString(_spacingKey);
       final String? alignName = prefs.getString(_alignKey);
       final String? layoutName = prefs.getString(_layoutKey);
+      final String? liftStyleName = prefs.getString(_liftStyleKey);
+      final String? staggerStyleName = prefs.getString(_staggerStyleKey);
       final String? fontName = prefs.getString(_fontKey);
       final String? weightName = prefs.getString(_weightKey);
       final bool applyKirakaraDefault =
@@ -301,10 +405,17 @@ class LyricsStyleController extends AsyncNotifier<LyricsStyle> {
           (LyricAlign a) => a.name == alignName,
           orElse: () => LyricAlign.right,
         ),
-        layout: LyricsLayoutMode.values.firstWhere(
-          (LyricsLayoutMode mode) => mode.name == layoutName,
-          orElse: () => LyricsLayoutMode.flowline,
+        layout: LyricsLayoutMode.fromStoredName(layoutName),
+        liftStyle: LyricLiftStyle.values.firstWhere(
+          (LyricLiftStyle value) => value.name == liftStyleName,
+          orElse: () => LyricLiftStyle.vertical,
         ),
+        staggerStyle: LyricStaggerStyle.values.firstWhere(
+          (LyricStaggerStyle value) => value.name == staggerStyleName,
+          orElse: () => LyricStaggerStyle.smooth,
+        ),
+        enableBlur: prefs.getBool(_blurKey) ?? true,
+        enableGlow: prefs.getBool(_glowKey) ?? false,
         fontFamily: LyricFontFamily.values.firstWhere(
           (LyricFontFamily item) => item.name == selectedFontName,
           orElse: () => LyricFontFamily.kirakara,
@@ -327,7 +438,6 @@ class LyricsStyleController extends AsyncNotifier<LyricsStyle> {
         ),
         showTranslation: prefs.getBool(_showTranslationKey) ?? true,
         desktopOverlay: prefs.getBool(_overlayKey) ?? true,
-        overlayFrame: prefs.getBool(_overlayFrameKey) ?? true,
         overlayLocked: prefs.getBool(_overlayLockedKey) ?? false,
       );
     } catch (error) {
@@ -350,6 +460,38 @@ class LyricsStyleController extends AsyncNotifier<LyricsStyle> {
       (state.value ?? const LyricsStyle()).copyWith(layout: layout),
     );
     await _write((SharedPreferences p) => p.setString(_layoutKey, layout.name));
+  }
+
+  Future<void> setLiftStyle(LyricLiftStyle value) async {
+    state = AsyncData<LyricsStyle>(
+      (state.value ?? const LyricsStyle()).copyWith(liftStyle: value),
+    );
+    await _write(
+      (SharedPreferences p) => p.setString(_liftStyleKey, value.name),
+    );
+  }
+
+  Future<void> setStaggerStyle(LyricStaggerStyle value) async {
+    state = AsyncData<LyricsStyle>(
+      (state.value ?? const LyricsStyle()).copyWith(staggerStyle: value),
+    );
+    await _write(
+      (SharedPreferences p) => p.setString(_staggerStyleKey, value.name),
+    );
+  }
+
+  Future<void> setEnableBlur(bool value) async {
+    state = AsyncData<LyricsStyle>(
+      (state.value ?? const LyricsStyle()).copyWith(enableBlur: value),
+    );
+    await _write((SharedPreferences p) => p.setBool(_blurKey, value));
+  }
+
+  Future<void> setEnableGlow(bool value) async {
+    state = AsyncData<LyricsStyle>(
+      (state.value ?? const LyricsStyle()).copyWith(enableGlow: value),
+    );
+    await _write((SharedPreferences p) => p.setBool(_glowKey, value));
   }
 
   Future<void> setFontFamily(LyricFontFamily value) async {
@@ -439,15 +581,7 @@ class LyricsStyleController extends AsyncNotifier<LyricsStyle> {
     await _write((SharedPreferences p) => p.setBool(_overlayKey, value));
   }
 
-  /// 开关桌面歌词的白色玻璃框（0.0.26）。
-  Future<void> setOverlayFrame(bool value) async {
-    state = AsyncData<LyricsStyle>(
-      (state.value ?? const LyricsStyle()).copyWith(overlayFrame: value),
-    );
-    await _write((SharedPreferences p) => p.setBool(_overlayFrameKey, value));
-  }
-
-  /// 锁定桌面歌词：锁定后窗口不参与拖动，也不显示玻璃底。
+  /// 锁定桌面歌词：锁定后窗口不参与拖动，桌面区域可直接点击。
   Future<void> setOverlayLocked(bool value) async {
     state = AsyncData<LyricsStyle>(
       (state.value ?? const LyricsStyle()).copyWith(overlayLocked: value),

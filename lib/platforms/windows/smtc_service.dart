@@ -87,7 +87,6 @@ class SmtcService {
       _log('测试环境，跳过');
       return false;
     }
-
     try {
       await SMTCWindows.initialize();
       final SMTCWindows smtc = SMTCWindows(

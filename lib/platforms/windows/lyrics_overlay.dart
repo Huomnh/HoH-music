@@ -9,24 +9,22 @@
 ///
 /// 窗口特性：
 /// - `WS_EX_LAYERED` + `UpdateLayeredWindow(ULW_ALPHA)`：逐像素透明；
-/// - `WS_EX_TRANSPARENT`：鼠标事件穿透，不挡住下面的窗口；
+/// - 锁定时通过 `WM_NCHITTEST` 返回 `HTTRANSPARENT`，鼠标事件穿透；
 /// - `WS_EX_TOPMOST` + `WS_EX_NOACTIVATE` + `WS_EX_TOOLWINDOW`：永远最上层、
 ///   点它不抢焦点、不进 Alt-Tab 与任务栏。
 ///
-/// ## 画面结构（0.0.26 重做）
+/// ## 画面结构（0.0.27 重做）
 ///
 /// ```
-/// ┌──────────────────────────────────────────┐  ← 白色半透明玻璃胶囊（可关）
-/// │  当前这句（大）                            │  ← 深色液态玻璃与主题色流动高光
-/// │  翻译 / 下一句（小、更淡）                  │
-/// └──────────────────────────────────────────┘
+///       当前这句（大，逐字高亮）
+///       翻译 / 下一句（小，更淡）
 /// ```
 ///
 /// - **两行**：第一行=当前句；第二行=**该句的翻译**，没有翻译时显示**下一句**。
 /// - **换行动效**：换句时旧句上移淡出、新句从第二行的位置升上来淡入（约 320ms）。
-/// - **玻璃框可关**（`LyricsStyle.overlayFrame`）：关掉后只剩文字，
-///   文字自动切成"白色 + 深色描边"，保证在任意桌面背景上都看得清。
-/// - **边框高光流动**：只在玻璃框显示时跑（30Hz 定时器重绘**只有边框那一圈**）。
+/// - 不绘制玻璃底、胶囊、边框或悬停背景；桌面歌词是主流播放器式的纯文字 HUD。
+/// - 当前句使用主题色逐字扫过，文字带稳定深色描边；下一句/翻译保持低对比度。
+/// - 解锁时只在文字区域拖动，锁定后整个浮层鼠标穿透，桌面区域可直接点击。
 ///
 /// ## 两个只有真跑才会撞到的坑
 ///
@@ -47,7 +45,7 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show Color, HSVColor;
+import 'package:flutter/material.dart' show Color;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -55,16 +53,20 @@ import '../../core/audio/player_providers.dart';
 import '../../features/player/lyrics/lyrics_style.dart';
 import '../../features/player/lyrics/lyrics_view.dart';
 import '../../features/player/lyrics/lyrics_parser.dart';
+import '../../features/player/lyrics/lyrics_timeline.dart';
 import '../../shared/theme/app_accent.dart';
-import '../../shared/theme/performance_tier.dart';
 
 void _log(String message) => stderr.writeln('[LyricsOverlay] $message');
 
 const int _wmNcHitTest = 0x0084;
+const int _wmEnterSizeMove = 0x0231;
 const int _wmExitSizeMove = 0x0232;
 const int _htCaption = 2;
 const int _htTransparent = -1;
 int _lyricsWindowProc(int hwnd, int message, int wParam, int lParam) {
+  if (message == _wmEnterSizeMove) {
+    LyricsOverlay.instance._dragging = true;
+  }
   if (message == _wmNcHitTest) {
     return LyricsOverlay.instance._hitTest(lParam);
   }
@@ -114,15 +116,10 @@ const int _fwNormal = 400;
 const int _smCxScreen = 0;
 const int _smCyScreen = 1;
 
-// 画笔常量
-const int _psSolid = 0;
-const int _psEndcapRound = 2; // PS_ENDCAP_ROUND
-const int _psJoinRound = 2; // PS_JOIN_ROUND
-
 /// 换行动效时长。
 const Duration _transition = Duration(milliseconds: 300);
 
-/// 播放器式换句动画节拍；玻璃框本身保持静止，避免边框重绘抖动。
+/// 播放器式换句动画节拍。原生 GDI 只更新透明文字位图，不运行玻璃边框定时器。
 const Duration _animationTick = Duration(milliseconds: 50);
 
 // ── 结构体 ────────────────────────────────────────────────────────
@@ -598,21 +595,17 @@ class LyricsOverlay {
   String? _current;
   String? _second;
   int _accentRgb = 0xFFFFFF;
-  bool _frame = true;
-  bool _glow = false;
   double _wordProgress = 0;
-  int _glassRgb = 0xFFFFFF;
-  int _glassAlpha = 150;
-  bool _glassVisible = false;
+  LyricDisplayMode _displayMode = LyricDisplayMode.wordByWord;
   bool _locked = false;
-  Timer? _hoverTimer;
+  bool _dragging = false;
+  bool _needsRenderAfterDrag = false;
 
   // 图层
   _Layer? _mainLayer;
   _Layer? _secondLayer;
   _Layer? _oldLayer;
   _Layer? _haloLayer;
-  _Layer? _glowLayer;
 
   // 字体（**独立于画布生命周期**，见文件头第 2 个坑）
   int _fontMain = 0;
@@ -625,9 +618,6 @@ class LyricsOverlay {
   DateTime? _animStart;
   String? _oldText;
   bool _animating = false;
-
-  /// 缓存的高光画笔（灰度 → HGDIOBJ），避免每秒新建上千支笔。
-  final Map<int, int> _pens = <int, int>{};
 
   bool get isVisible => _hwnd != 0;
 
@@ -654,33 +644,6 @@ class LyricsOverlay {
   static int _signedWord(int value) =>
       value & 0x8000 != 0 ? value - 0x10000 : value;
 
-  void _startHoverWatch() {
-    _hoverTimer ??= Timer.periodic(const Duration(milliseconds: 100), (_) {
-      if (_hwnd == 0 || _width <= 0 || _height <= 0) return;
-      final Pointer<_Rect> rect = calloc<_Rect>();
-      final Pointer<_Point> point = calloc<_Point>();
-      try {
-        if (_GetWindowRect(_hwnd, rect) == 0 || _GetCursorPos(point) == 0)
-          return;
-        final bool inside = _insideCapsule(
-          point.ref.x - rect.ref.left,
-          point.ref.y - rect.ref.top,
-          _width,
-          _height,
-          _height ~/ 2,
-        );
-        final bool shouldShow = !_locked && inside;
-        if (shouldShow != _glassVisible) {
-          _glassVisible = shouldShow;
-          _render();
-        }
-      } finally {
-        calloc.free(rect);
-        calloc.free(point);
-      }
-    });
-  }
-
   void _syncDraggedPosition() {
     if (_hwnd == 0) return;
     final Pointer<_Rect> rect = calloc<_Rect>();
@@ -691,6 +654,11 @@ class LyricsOverlay {
       }
     } finally {
       calloc.free(rect);
+    }
+    _dragging = false;
+    if (_needsRenderAfterDrag) {
+      _needsRenderAfterDrag = false;
+      _render();
     }
   }
 
@@ -730,7 +698,6 @@ class LyricsOverlay {
       _posX = -1;
       _posY = -1;
       _ShowWindow(_hwnd, _swShowNoActivate);
-      _startHoverWatch();
       _log('浮层窗口已创建 hwnd=$_hwnd');
       return true;
     } catch (error) {
@@ -747,13 +714,10 @@ class LyricsOverlay {
     required String? current,
     String? second,
     required Color accent,
-    bool frame = true,
-    bool glow = false,
     double fontSize = baseFontSize,
     double wordProgress = 0,
+    LyricDisplayMode displayMode = LyricDisplayMode.wordByWord,
     String fontFamily = 'Segoe UI',
-    int glassRgb = 0xFFFFFF,
-    int glassAlpha = 150,
     bool locked = false,
   }) {
     if (!isSupported) return;
@@ -772,11 +736,9 @@ class LyricsOverlay {
         text == _current &&
         secondText == _second &&
         accentRgb == _accentRgb &&
-        frame == _frame &&
-        glassRgb == _glassRgb &&
-        glassAlpha == _glassAlpha &&
         locked == _locked &&
         wordProgress == _wordProgress &&
+        displayMode == _displayMode &&
         fontFamily == _fontFamily &&
         fontPx == _fontPx;
     if (sameContent && !_animating) {
@@ -785,16 +747,24 @@ class LyricsOverlay {
 
     final bool lineChanged = _current != null && text != _current;
     _accentRgb = accentRgb;
-    _frame = frame;
     _fontPx = fontPx;
-    // 兼容旧调用方，但不再运行边框高光动画。
-    _glow = false;
     _wordProgress = wordProgress.clamp(0.0, 1.0);
+    _displayMode = displayMode;
     _fontFamily = fontFamily;
-    _glassRgb = glassRgb;
-    _glassAlpha = glassAlpha.clamp(0, 255);
     _locked = locked;
-    if (_locked) _glassVisible = false;
+
+    // Windows 在拖动透明分层窗口时会继续收到歌词进度更新。不要在
+    // WM_ENTERSIZEMOVE/WM_EXITSIZEMOVE 之间重绘并 SetWindowPos，否则旧坐标
+    // 会把窗口拉回去，表现为闪烁、跳动或松手后瞬移。
+    if (_dragging) {
+      _animTimer?.cancel();
+      _animating = false;
+      _oldText = null;
+      _current = text;
+      _second = secondText;
+      _needsRenderAfterDrag = true;
+      return;
+    }
 
     if (lineChanged) {
       // 旧的当前句 → 动效里上移淡出
@@ -807,32 +777,24 @@ class LyricsOverlay {
       _second = secondText;
       _render();
     }
-
-    _stopGlow();
   }
 
   /// 隐藏浮层（保留窗口，下次直接复用）。
   void hide() {
     if (_hwnd == 0) return;
-    _stopGlow();
     _animTimer?.cancel();
     _animating = false;
     _oldText = null;
     _current = null;
     _second = null;
     _ShowWindow(_hwnd, _swHide);
-    _glassVisible = false;
   }
 
   /// 彻底销毁。
   void dispose() {
-    _stopGlow();
     _animTimer?.cancel();
-    _hoverTimer?.cancel();
-    _hoverTimer = null;
     _releaseLayers();
     _releaseFonts();
-    _releasePens();
     if (_hwnd != 0) {
       _DestroyWindow(_hwnd);
       _hwnd = 0;
@@ -864,8 +826,6 @@ class LyricsOverlay {
     _oldLayer = null;
     _haloLayer?.dispose();
     _haloLayer = null;
-    _glowLayer?.dispose();
-    _glowLayer = null;
   }
 
   void _ensureFonts(int fontPx) {
@@ -1013,7 +973,6 @@ class LyricsOverlay {
       _secondLayer = _Layer(width, height);
       _oldLayer = _Layer(width, height);
       _haloLayer = _Layer(width, height);
-      _glowLayer = _Layer(width, height);
       if (!_mainLayer!.isOk) {
         _log('CreateDIBSection 失败（浮层不可用）');
         _releaseLayers();
@@ -1025,12 +984,10 @@ class LyricsOverlay {
     final _Layer secondLayer = _secondLayer!;
     final _Layer oldLayer = _oldLayer!;
     final _Layer halo = _haloLayer!;
-    final _Layer glow = _glowLayer!;
     main.clear();
     secondLayer.clear();
     oldLayer.clear();
     halo.clear();
-    glow.clear();
 
     // ② 画覆盖率
     final int mainTop = _padY;
@@ -1045,46 +1002,40 @@ class LyricsOverlay {
     final int oldOffset = animating ? (-8 * eased).round() : 0;
     final int currentOffset = animating ? (8 * (1 - eased)).round() : 0;
 
-    if (_frame) {
-      // 玻璃框：只是白底 + 高光，不需要描边层
-      if (_glassVisible) {
-        _drawFrame(halo, glow, current: current, glowOn: _glow);
-      }
-    } else {
-      // 只有文字：用描边层画深色小字轮廓（8 方向偏移），保证任何背景都看得清
-      final String oldText = _oldText ?? '';
-      for (final List<int> d in _haloOffsets) {
+    // 桌面歌词采用稳定的深色描边，保证浅色壁纸上仍然清晰；
+    // 不再绘制玻璃底、胶囊边框或边框高光。
+    final String oldText = _oldText ?? '';
+    for (final List<int> d in _haloOffsets) {
+      _drawCoverage(
+        halo,
+        current,
+        _fontMain,
+        mainTop,
+        mainBottom,
+        currentOffset + d[1],
+        0x00FFFFFF,
+      );
+      if (second.isNotEmpty) {
         _drawCoverage(
           halo,
-          current,
+          second,
+          _fontSecond,
+          secondTop,
+          secondBottom,
+          d[1],
+          0x00FFFFFF,
+        );
+      }
+      if (animating && oldText.isNotEmpty) {
+        _drawCoverage(
+          halo,
+          oldText,
           _fontMain,
           mainTop,
           mainBottom,
-          currentOffset + d[1],
+          oldOffset + d[1],
           0x00FFFFFF,
         );
-        if (second.isNotEmpty) {
-          _drawCoverage(
-            halo,
-            second,
-            _fontSecond,
-            secondTop,
-            secondBottom,
-            d[1],
-            0x00FFFFFF,
-          );
-        }
-        if (animating && oldText.isNotEmpty) {
-          _drawCoverage(
-            halo,
-            oldText,
-            _fontMain,
-            mainTop,
-            mainBottom,
-            oldOffset + d[1],
-            0x00FFFFFF,
-          );
-        }
       }
     }
 
@@ -1125,7 +1076,6 @@ class LyricsOverlay {
       second: secondLayer,
       old: oldLayer,
       halo: halo,
-      glow: glow,
       progress: p,
       animating: animating,
     );
@@ -1144,87 +1094,12 @@ class LyricsOverlay {
     <int>[1, 1],
   ];
 
-  /// 玻璃框：深色半透明胶囊 + 边框高光（画在 halo/glow 两个图层里）。
-  void _drawFrame(
-    _Layer frameLayer,
-    _Layer glowLayer, {
-    required String current,
-    required bool glowOn,
-  }) {
-    // 深色玻璃基底：和主界面的深色液态玻璃一致，轮廓留给彩色边框高光。
-    final Uint32List? framePixels = frameLayer.pixels;
-    if (framePixels == null) return;
-    final int radius = _height ~/ 2;
-    for (int y = 0; y < _height; y++) {
-      final int rowStart = y * _width;
-      for (int x = 0; x < _width; x++) {
-        if (_insideCapsule(x, y, _width, _height, radius)) {
-          framePixels[rowStart + x] = 0x00FFFFFF;
-        }
-      }
-    }
-
-    // 边框不再绘制移动高光。静态半透明胶囊由主界面动画层负责“播放感”，
-    // 独立桌面歌词只做稳定的句间过渡，避免 GDI 高频描边带来的抖动。
-  }
-
-  /// 按灰度取（并缓存）一支 2px 实心圆头画笔。
-  int _pen(int gray) {
-    final int key = gray.clamp(0, 255);
-    final int? cached = _pens[key];
-    if (cached != null) return cached;
-    final int handle = _CreatePen(_psSolid, 2, key * 0x010101);
-    _pens[key] = handle;
-    return handle;
-  }
-
-  void _releasePens() {
-    for (final int handle in _pens.values) {
-      if (handle != 0) _DeleteObject(handle);
-    }
-    _pens.clear();
-  }
-
-  /// 胶囊轮廓采样点（x0,y0,x1,y1,...）。
-  List<double> _capsulePath(int radius) {
-    final List<double> pts = <double>[];
-    const int arcSteps = 10;
-    final double w = _width.toDouble();
-    final double h = _height.toDouble();
-    final double r = radius.toDouble();
-    // 上边：左 → 右
-    final int edgeSteps = math.max(8, (_width / 26).round());
-    for (int i = 0; i <= edgeSteps; i++) {
-      pts.add(r + (w - 2 * r) * i / edgeSteps);
-      pts.add(0.5);
-    }
-    // 右半圆
-    for (int i = 1; i <= arcSteps; i++) {
-      final double a = -math.pi / 2 + math.pi * i / arcSteps;
-      pts.add(w / 2 + (w / 2 - r) + r * math.cos(a));
-      pts.add(h / 2 + r * math.sin(a));
-    }
-    // 下边：右 → 左
-    for (int i = 0; i <= edgeSteps; i++) {
-      pts.add(w - r - (w - 2 * r) * i / edgeSteps);
-      pts.add(h - 0.5);
-    }
-    // 左半圆
-    for (int i = 1; i <= arcSteps; i++) {
-      final double a = math.pi / 2 + math.pi * i / arcSteps;
-      pts.add(r + r * math.cos(a));
-      pts.add(h / 2 + r * math.sin(a));
-    }
-    return pts;
-  }
-
   /// 合成 premultiplied BGRA 并推给系统。
   void _composite({
     required _Layer main,
     required _Layer second,
     required _Layer old,
     required _Layer halo,
-    required _Layer glow,
     required double progress,
     required bool animating,
   }) {
@@ -1232,53 +1107,23 @@ class LyricsOverlay {
     final Uint32List? secondPx = second.pixels;
     final Uint32List? oldPx = old.pixels;
     final Uint32List? haloPx = halo.pixels;
-    final Uint32List? glowPx = glow.pixels;
-    if (out == null ||
-        secondPx == null ||
-        oldPx == null ||
-        haloPx == null ||
-        glowPx == null) {
+    if (out == null || secondPx == null || oldPx == null || haloPx == null) {
       return;
     }
 
-    // 颜色（都按 premultiplied 计算）
-    final bool frame = _frame && _glassVisible;
-    // 桌面歌词沿用主 UI 的互补玻璃颜色和透明度。
-    final int frameAlpha = _glassAlpha;
-    final int mainR;
-    final int mainG;
-    final int mainB;
-    final int secondR;
-    final int secondG;
-    final int secondB;
-    final int haloR;
-    final int haloG;
-    final int haloB;
-    if (frame) {
-      mainR = 248;
-      mainG = 246;
-      mainB = 255;
-      secondR = 190;
-      secondG = 186;
-      secondB = 211;
-      haloR = 0;
-      haloG = 0;
-      haloB = 0;
-    } else {
-      // 只有文字：白字 + 深色描边
-      mainR = 255;
-      mainG = 255;
-      mainB = 255;
-      secondR = 226;
-      secondG = 226;
-      secondB = 232;
-      haloR = 0;
-      haloG = 0;
-      haloB = 0;
-    }
+    // 纯文字 HUD：白色主字、主题色逐字高亮、低对比度副行与稳定描边。
+    const int mainR = 255;
+    const int mainG = 255;
+    const int mainB = 255;
+    const int secondR = 226;
+    const int secondG = 226;
+    const int secondB = 232;
+    const int haloR = 0;
+    const int haloG = 0;
+    const int haloB = 0;
     final int mainAlpha = 255;
-    final int secondAlpha = frame ? 210 : 200;
-    final int haloAlpha = frame ? 0 : 200;
+    const int secondAlpha = 200;
+    const int haloAlpha = 200;
     final double transitionProgress =
         progress * progress * (3.0 - 2.0 * progress);
     final int oldAlpha = animating
@@ -1303,45 +1148,27 @@ class LyricsOverlay {
         a = alpha + a * (255 - alpha) ~/ 255;
       }
 
-      // ① 玻璃框底（深色半透明）
-      if (frame) {
-        final int cov = haloPx[i] & 0xFF; // 框的覆盖率
-        if (cov > 0) {
-          over(
-            ((_glassRgb >> 16) & 0xFF),
-            ((_glassRgb >> 8) & 0xFF),
-            _glassRgb & 0xFF,
-            cov * frameAlpha ~/ 255,
-          );
-        }
+      // ① 深色描边
+      final int haloCov = haloPx[i] & 0xFF;
+      if (haloCov > 0) {
+        over(haloR, haloG, haloB, haloCov * haloAlpha ~/ 255);
       }
-      // ② 边框高光
-      final int glowCov = glowPx[i] & 0xFF;
-      if (glowCov > 0) {
-        final int peak = _lerpToWhite(_accentRgb, 0.4);
-        over((peak >> 16) & 0xFF, (peak >> 8) & 0xFF, peak & 0xFF, glowCov);
-      }
-      // ③ 深色描边（只有关掉玻璃框时才画）
-      if (haloAlpha > 0) {
-        final int cov = haloPx[i] & 0xFF;
-        if (cov > 0) over(haloR, haloG, haloB, cov * haloAlpha ~/ 255);
-      }
-      // ④ 旧句（淡出）
+      // ② 旧句（淡出）
       if (oldAlpha > 0) {
         final int cov = oldPx[i] & 0xFF;
         if (cov > 0) over(mainR, mainG, mainB, cov * oldAlpha ~/ 255);
       }
-      // ⑤ 当前句
+      // ③ 当前句
       final int mainCov = out[i] & 0xFF;
       if (mainCov > 0) {
         final bool revealed =
-            frame && (i % _width) >= textLeft && (i % _width) <= revealRight;
+            (i % _width) >= textLeft && (i % _width) <= revealRight;
         final int r = revealed ? ((_accentRgb >> 16) & 0xFF) : mainR;
         final int g = revealed ? ((_accentRgb >> 8) & 0xFF) : mainG;
         final int b = revealed ? (_accentRgb & 0xFF) : mainB;
         over(r, g, b, mainCov * mainAlpha ~/ 255);
       }
-      // ⑥ 第二行
+      // ④ 第二行
       final int secondCov = secondPx[i] & 0xFF;
       if (secondCov > 0) {
         over(secondR, secondG, secondB, secondCov * secondAlpha ~/ 255);
@@ -1361,24 +1188,35 @@ class LyricsOverlay {
     if (layer == null || _hwnd == 0) return;
     final int screenW = _GetSystemMetrics(_smCxScreen);
     final int workBottom = _workAreaBottom();
-    final int x = _posX >= 0
-        ? _posX
-        : ((screenW - _width) ~/ 2).clamp(0, screenW);
-    final int y = _posY >= 0
+    int x = _posX >= 0 ? _posX : ((screenW - _width) ~/ 2).clamp(0, screenW);
+    int y = _posY >= 0
         ? _posY
         : (workBottom - _height - 12).clamp(0, workBottom);
+    if (_dragging) {
+      final Pointer<_Rect> rect = calloc<_Rect>();
+      try {
+        if (_GetWindowRect(_hwnd, rect) != 0) {
+          x = rect.ref.left;
+          y = rect.ref.top;
+        }
+      } finally {
+        calloc.free(rect);
+      }
+    }
     _posX = x;
     _posY = y;
 
-    _SetWindowPos(
-      _hwnd,
-      _hwndTopmost,
-      x,
-      y,
-      _width,
-      _height,
-      _swpNoActivate | _swpShowWindow,
-    );
+    if (!_dragging) {
+      _SetWindowPos(
+        _hwnd,
+        _hwndTopmost,
+        x,
+        y,
+        _width,
+        _height,
+        _swpNoActivate | _swpShowWindow,
+      );
+    }
 
     final int screenDc = _userGetDc(0);
     final Pointer<_Point> dst = calloc<_Point>();
@@ -1418,28 +1256,9 @@ class LyricsOverlay {
     if (ok == 0) _log('UpdateLayeredWindow 返回 0（没画上去）');
   }
 
-  // ── 玻璃框动效 ───────────────────────────────────────────────
-
-  // 保留旧接口，避免外部调用方改变；新的桌面歌词不再运行高光定时器。
-  void _stopGlow() {}
-
   // ── 小工具 ────────────────────────────────────────────────────
 
-  static bool _insideCapsule(int x, int y, int width, int height, int radius) {
-    final int cx = x < radius
-        ? radius
-        : (x >= width - radius ? width - radius - 1 : x);
-    final int cy = y < radius
-        ? radius
-        : (y >= height - radius ? height - radius - 1 : y);
-    final int dx = x - cx;
-    final int dy = y - cy;
-    if (dx == 0 && dy == 0) return true;
-    return dx * dx + dy * dy <= radius * radius;
-  }
-
   bool _insideTextArea(int x, int y) {
-    if (!_insideCapsule(x, y, _width, _height, _height ~/ 2)) return false;
     if (_fontMain == 0 || _fontSecond == 0) return false;
     final int mainHeight = math.max(18, _fontPx);
     final int secondHeight = math.max(14, (_fontPx * secondLineRatio).round());
@@ -1462,22 +1281,6 @@ class LyricsOverlay {
     final int g = (color.g * 255).round() & 0xFF;
     final int b = (color.b * 255).round() & 0xFF;
     return (r << 16) | (g << 8) | b;
-  }
-
-  /// 往深里压（兼容旧样式计算）。
-  static int _darken(int rgb, double amount) {
-    final int r = ((rgb >> 16) & 0xFF) * (1 - amount) ~/ 1;
-    final int g = ((rgb >> 8) & 0xFF) * (1 - amount) ~/ 1;
-    final int b = (rgb & 0xFF) * (1 - amount) ~/ 1;
-    return (r.clamp(0, 255) << 16) | (g.clamp(0, 255) << 8) | b.clamp(0, 255);
-  }
-
-  /// 往白里提（高光峰值）。
-  static int _lerpToWhite(int rgb, double amount) {
-    int mix(int c) => (c + (255 - c) * amount).round().clamp(0, 255);
-    return (mix((rgb >> 16) & 0xFF) << 16) |
-        (mix((rgb >> 8) & 0xFF) << 8) |
-        mix(rgb & 0xFF);
   }
 }
 
@@ -1537,51 +1340,34 @@ class _LyricsOverlayHostState extends ConsumerState<LyricsOverlayHost> {
         ref.watch(playbackPositionProvider).value ?? Duration.zero;
     double wordProgress = 0;
     if (lyrics != null && lyricIndex >= 0 && lyricIndex < lyrics.lines.length) {
-      final Duration start = lyrics.lines[lyricIndex].time;
-      final Duration end = lyricIndex + 1 < lyrics.lines.length
-          ? lyrics.lines[lyricIndex + 1].time
-          : start + const Duration(seconds: 5);
-      final int span = end.inMilliseconds - start.inMilliseconds;
-      if (span > 0) {
-        wordProgress = ((position.inMilliseconds - start.inMilliseconds) / span)
-            .clamp(0.0, 1.0);
-      }
+      final LyricsTimeline timeline = LyricsTimeline.fromLyrics(
+        lyrics,
+        source: 'hoh-normalized',
+      );
+      wordProgress = timeline.progressAt(lyricIndex, position);
     }
     // 第二行：优先翻译，没有翻译就显示下一句
     final String? second =
         demo?.$2 ??
         ref.watch(currentLyricTranslationProvider) ??
         ref.watch(nextLyricLineProvider);
-    final BlurConfig glassConfig = ref.watch(blurConfigProvider);
-    final bool animations = glassConfig.animationsEnabled;
-    final HSVColor glassHsv = HSVColor.fromColor(accent.primary);
-    final Color glassColor = glassHsv
-        .withHue((glassHsv.hue + 180) % 360)
-        .withSaturation(glassConfig.glassSaturation)
-        .withValue((1.0 - glassConfig.glassTone * 0.72).clamp(0.22, 1.0))
-        .toColor();
-    final int glassRgb =
-        (glassColor.r * 255).round() << 16 |
-        (glassColor.g * 255).round() << 8 |
-        (glassColor.b * 255).round();
-    final int glassAlpha = ((0.02 + 0.18 * glassConfig.tintOpacity) * 255)
-        .round();
-
     final String key = <String>[
       enabled ? '1' : '0',
-      animations ? '1' : '0',
-      style.overlayFrame ? '1' : '0',
       style.overlayLocked ? '1' : '0',
       current ?? '',
-      (wordProgress * 10).round().toString(),
+      // 原生 GDI 浮层维持 30Hz 上限；去掉玻璃后每帧成本更低，
+      // 同时避免无意义的 100ms/10Hz 阶梯感。
+      (wordProgress * 30).round().toString(),
       second ?? '',
       accent.primary.toARGB32().toRadixString(16),
       style.fontFamily.name,
+      style.layout.name,
+      style.displayMode.name,
     ].join('|');
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (!enabled || !animations || current == null || current.isEmpty) {
+      if (!enabled || current == null || current.isEmpty) {
         if (_pushedKey != null) {
           _pushedKey = null;
           LyricsOverlay.instance.hide();
@@ -1594,18 +1380,16 @@ class _LyricsOverlayHostState extends ConsumerState<LyricsOverlayHost> {
         current: current,
         second: second,
         accent: accent.primary,
-        frame: style.overlayFrame,
         locked: style.overlayLocked,
-        // 桌面歌词采用主流播放器的稳定 HUD 动画，不运行边框高光。
-        glow: false,
         fontSize: LyricsOverlay.baseFontSize,
-        wordProgress: (wordProgress * 10).round() / 10,
+        // 不再按十分之一秒级别量化；HoH 的逐字扫光需要连续时间轴，
+        // 否则桌面歌词会明显一顿一顿。
+        wordProgress: wordProgress,
+        displayMode: style.displayMode,
         // 桌面歌词不再读取全局程序字体，固定使用 Windows 系统默认 UI 字体。
         // 原生 GDI 不能读取 Flutter assets 中的字体文件，桌面歌词暂以
         // Windows 系统 UI 字体绘制；播放页歌词使用内置耀圆体。
         fontFamily: 'Segoe UI',
-        glassRgb: glassRgb,
-        glassAlpha: glassAlpha,
       );
     });
 

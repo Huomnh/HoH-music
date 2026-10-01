@@ -49,7 +49,7 @@ void main() {
       expect(back.enabled, isFalse);
       expect(back.version, '1.0.2');
       expect(back.platforms, <String>['wy', 'tx']);
-      expect(back.platformLabels, <String>['网易云', 'QQ音乐']);
+      expect(back.platformLabels, <String>['芸音', '鹅音']);
     });
 
     test('坏数据不炸：空串 / 非 JSON / 混了坏记录都只丢弃坏的那条', () {
@@ -104,7 +104,7 @@ const text = "@name 正文里的假名字";
 
     test('id 用「平台:歌曲id」，与播放队列里的 Track.id 对得上', () {
       expect(track.id, 'wy:186016');
-      expect(track.platformLabel, '网易云');
+      expect(track.platformLabel, '芸音');
     });
 
     test('musicInfo 把各平台可能用到的字段名都给全', () {
@@ -299,7 +299,7 @@ const text = "@name 正文里的假名字";
 
   group('展示名兜底', () {
     test('未知平台 / 音质原样返回，不当成空', () {
-      expect(platformLabel('wy'), '网易云');
+      expect(platformLabel('wy'), '芸音');
       expect(platformLabel('unknown-platform'), 'unknown-platform');
       expect(qualityLabel('320k'), '高 320k');
       expect(qualityLabel('weird'), 'weird');
@@ -337,6 +337,63 @@ const text = "@name 正文里的假名字";
           'data': <String, dynamic>{},
         }),
         isEmpty,
+      );
+    });
+
+    test('QQ歌单：按顺序读取曲目信息并按 ID 去重', () {
+      final List<OnlineTrack> tracks = HostSearch.parseQQPlaylist(
+        jsonDecode('''
+        {"songlist":[
+          {"id":123,"mid":"001mid","name":"歌一","interval":211,
+           "singer":[{"name":"歌手甲"}],"album":{"mid":"albummid","name":"专辑甲"},
+           "file":{"media_mid":"media001"}},
+          {"id":123,"mid":"001mid","name":"歌一","interval":211,
+           "singer":[{"name":"歌手甲"}],"album":{"mid":"albummid","name":"专辑甲"}},
+          {"id":456,"mid":"","name":"歌二","interval":180,
+           "singer":[{"name":"歌手乙"}],"album":{"name":"专辑乙"}}
+        ]}''') as Map<String, dynamic>,
+      );
+      expect(tracks.map((OnlineTrack track) => track.songId), <String>[
+        '001mid',
+        '456',
+      ]);
+      expect(tracks.first.title, '歌一');
+      expect(tracks.first.artist, '歌手甲');
+      expect(tracks.first.duration, const Duration(seconds: 211));
+      expect(tracks.first.extra['media_mid'], 'media001');
+      expect(tracks.last.album, '专辑乙');
+    });
+
+    test('QQ歌单分享：网页链接和电脑端短链都能提取真实 ID', () {
+      expect(
+        HostSearch.extractQqPlaylistId(
+          'https://i2.y.qq.com/n3/other/pages/details/playlist.html?id=8042312767',
+        ),
+        '8042312767',
+      );
+      expect(
+        HostSearch.extractQqPlaylistId(
+          '<meta property="og:url" content="https://y.qq.com//n/ryqq_v2/playlist/3571076617">',
+        ),
+        '3571076617',
+      );
+      expect(
+        HostSearch.extractQqPlaylistId(
+          r'https://c6.y.qq.com/base/fcgi-bin/u?__=token\&next=https%3A%2F%2Fy.qq.com%2Fplaylist%2F9083461089',
+        ),
+        '9083461089',
+      );
+      expect(
+        HostSearch.extractQqPlaylistId(
+          r'{"og:url":"https:\/\/y.qq.com\/n\/ryqq_v2\/playlist\/3571076617"}',
+        ),
+        '3571076617',
+      );
+      expect(
+        HostSearch.extractQqPlaylistId(
+          'https://y.qq.com/n/ryqq_v2/playlist/3571076617?ADTAG=h5_share_playlist&redirecttag=mn.redirect.custom&mnst=0.98',
+        ),
+        '3571076617',
       );
     });
 

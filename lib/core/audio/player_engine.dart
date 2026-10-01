@@ -903,10 +903,21 @@ class PlayerEngine {
 
   /// 释放资源。
   Future<void> dispose() async {
+    if (_disposed) return;
     _disposed = true;
+    final Player? player = _player;
+    // 先暂停再释放，避免退出窗口已经隐藏后音频仍继续播放一小段时间。
+    // 不读取 lazy getter，避免从未播放过的应用在退出时反而创建播放器。
+    if (player != null) {
+      try {
+        await player.pause().timeout(const Duration(milliseconds: 300));
+      } catch (_) {
+        // dispose 仍会继续尝试释放原生播放器。
+      }
+    }
     await _queueController.close();
     await _trackInfoController.close();
-    await _player?.dispose();
+    await player?.dispose();
     _player = null;
   }
 }

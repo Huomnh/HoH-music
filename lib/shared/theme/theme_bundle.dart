@@ -44,6 +44,15 @@ class ThemeBundle {
           'tintOpacity': glass.tintOpacity,
           'glassSaturation': glass.glassSaturation,
           'glassTone': glass.glassTone,
+          'glassThickness': glass.glassThickness,
+          'frostIntensity': glass.frostIntensity,
+          'refractiveIndex': glass.refractiveIndex,
+          'chromaticAberration': glass.chromaticAberration,
+          'lightAngle': glass.lightAngle,
+          'lightIntensity': glass.lightIntensity,
+          'ambientStrength': glass.ambientStrength,
+          'liquidSaturation': glass.liquidSaturation,
+          'fakeGlassRefraction': glass.fakeGlassRefraction,
           'glowStrength': glass.glowStrength,
           'sweepEnabled': glass.sweepEnabled,
           'animationsEnabled': glass.animationsEnabled,
@@ -154,6 +163,7 @@ class ThemeBundle {
   static String _backgroundFileStem(BackgroundKind kind) => switch (kind) {
     BackgroundKind.liquidBloom => 'liquid_bloom',
     BackgroundKind.deepTide => 'deep_tide',
+    BackgroundKind.animeCandy => 'anime_candy',
     BackgroundKind.custom => 'custom',
   };
 

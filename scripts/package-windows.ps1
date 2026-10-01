@@ -22,6 +22,8 @@ $installerScript = Join-Path $projectRoot 'packaging\hoh_music.iss'
 $manualSourcesDir = Join-Path $projectRoot ('music' + [char]0x97F3 + [char]0x6E90)
 
 if (-not $SkipBuild) {
+  & (Join-Path $PSScriptRoot 'patch-smtc-cargokit-hidden-path.ps1')
+  if ($LASTEXITCODE -ne 0) { throw "Cargokit compatibility patch failed with exit code $LASTEXITCODE" }
   & flutter build windows --release
   if ($LASTEXITCODE -ne 0) { throw "Flutter Release build failed with exit code $LASTEXITCODE" }
 }

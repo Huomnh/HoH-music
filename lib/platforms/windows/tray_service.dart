@@ -7,8 +7,8 @@
 ///   因为原生侧要的是文件路径，不是 Flutter 资源）；
 /// - **右键菜单**：显示 / 隐藏窗口、播放 / 暂停、上一首、下一首、退出；
 /// - **左键单击**：显示 / 隐藏窗口；**双击**：显示并聚焦；
-/// - **关闭按钮 → 收进托盘**：由 [TrayHost] 打开 `preventClose` 后接管，
-///   真正退出走托盘菜单的「退出」。
+/// - **关闭按钮**：由 [TrayHost] 打开 `preventClose` 后弹出「退出程序 / 保留后台 / 取消」选择，
+///   保留后台时隐藏到托盘，退出程序时释放资源并结束进程。
 ///
 /// ⚠️ 这里用的是 `tray_manager` 0.7 的**新 FFI API**（`package:nativeapi`），
 /// 不是被标记为 `@Deprecated` 的 `trayManager` 单例 —— 后者在 0.7 上
@@ -24,7 +24,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:tray_manager/tray_manager.dart' as tray;
@@ -34,6 +34,9 @@ import '../../core/audio/player_engine.dart';
 import '../../core/audio/player_providers.dart';
 import '../../shared/constants.dart';
 import 'desktop_window.dart';
+import 'global_hotkey_service.dart';
+import 'lyrics_overlay.dart';
+import 'smtc_service.dart';
 
 /// 诊断日志走 stderr：`debugPrint` 带节流、启动早期会丢行。
 void _log(String message) => stderr.writeln('[Tray] $message');
@@ -99,7 +102,6 @@ class TrayService {
       _log('测试环境，跳过');
       return false;
     }
-
     try {
       final tray.TrayIcon? icon = tray.TrayIcon.create();
       if (icon == null) {
@@ -288,42 +290,66 @@ class TrayService {
 /// `scripts/capture-window.ps1` 每次强杀攒出来的。
 /// 现在脚本改用 `hoh_music.exe --exit-after=N` 让应用自己走这条路
 /// （见 `debug_autoexit.dart`）。
-Future<void> quitAppGracefully() async {
+Future<void>? _quitFuture;
+
+Future<void> quitAppGracefully() {
+  // 托盘菜单、调试自动退出和窗口关闭可能在同一时间触发；共享同一个
+  // Future，避免重复销毁音频、托盘和原生歌词窗口。
+  return _quitFuture ??= _quitAppInternal();
+}
+
+Future<void> _quitAppInternal() async {
   _log('退出：先隐藏窗口，原生资源后台释放');
-  try {
-    await windowManager.setPreventClose(false);
-  } catch (_) {
-    // 忽略：可能本来就没设过
-  }
+  await _boundedCleanup('解除关闭拦截', windowManager.setPreventClose(false));
 
   // hide 通常比 destroy 快得多，先让用户立刻看到 UI 消失；窗口销毁和
   // 托盘 NIM_DELETE 在后台继续，避免原生句柄释放卡住关闭反馈。
-  try {
-    await windowManager.hide();
-  } catch (error) {
-    _log('隐藏窗口失败：$error');
-  }
-  unawaited(_finishQuit());
+  await _boundedCleanup('隐藏窗口', windowManager.hide());
+  _log('主窗口已隐藏，开始释放平台资源');
+  await _finishQuit();
 }
 
 Future<void> _finishQuit() async {
+  // 先撤掉会继续产生窗口/FFI 更新的服务，再释放播放器。桌面歌词的
+  // dispose 是同步的，必须在 destroy 主窗口之前做，避免退出时仍有一帧
+  // 分层窗口和音频状态在后台争用消息循环。
   try {
-    await PlayerEngine.instance.dispose();
+    LyricsOverlay.instance.dispose();
   } catch (error) {
-    _log('音频引擎释放失败：$error');
+    _log('桌面歌词释放失败（继续退出）：$error');
   }
+  await Future.wait<void>(<Future<void>>[
+    _boundedCleanup('全局快捷键', GlobalHotkeyService.instance.unregister()),
+    _boundedCleanup('系统媒体控制', SmtcService.instance.dispose()),
+    _boundedCleanup('托盘', TrayService.instance.dispose()),
+  ]);
+
+  // 音频释放放在窗口已隐藏、平台服务已停止之后；即使某个原生插件迟迟
+  // 不返回，超时也不会让用户看到“窗口已经消失但进程不退”的长卡顿。
+  await _boundedCleanup('音频引擎', PlayerEngine.instance.dispose());
+
+  // Flutter 3.47.5 Windows runner 在 Dart 主动 destroy 窗口后会进入引擎
+  // 控制器销毁路径，并在本机触发 flutter_windows.dll 的访问违例。窗口已经
+  // 隐藏、托盘和音频资源也都释放后，直接结束当前进程更可靠；Windows 会
+  // 回收剩余窗口句柄和单实例互斥体，不会留下托盘图标。
+  _log('退出资源释放流程完成，结束进程');
+  exit(0);
+}
+
+/// 退出清理是 best-effort：关闭反馈不能被单个失灵的插件拖住。
+Future<void> _boundedCleanup(String name, Future<void> operation) async {
   try {
-    await windowManager.destroy();
+    await operation.timeout(const Duration(milliseconds: 900));
+    _log('$name完成');
   } catch (error) {
-    _log('窗口销毁失败：$error');
+    _log('$name释放超时/失败（继续退出）：$error');
   }
-  await TrayService.instance.dispose();
 }
 
 /// 把托盘接到应用上。
 ///
 /// 挂在 `MaterialApp` 内层（需要访问 Riverpod 里的播放器控制器），
-/// 同时接管「点关闭按钮 = 收进托盘」。
+/// 同时接管「点关闭按钮 = 弹出退出/后台选择」。
 class TrayHost extends ConsumerStatefulWidget {
   const TrayHost({super.key, required this.child});
 
@@ -339,6 +365,7 @@ class TrayHost extends ConsumerStatefulWidget {
 
 class _TrayHostState extends ConsumerState<TrayHost> with WindowListener {
   bool _ownsPreventClose = false;
+  bool _closeDialogShowing = false;
 
   @override
   void initState() {
@@ -374,7 +401,7 @@ class _TrayHostState extends ConsumerState<TrayHost> with WindowListener {
     try {
       await windowManager.setPreventClose(true);
       _ownsPreventClose = true;
-      _log('已接管关闭按钮：点 ✕ 收进托盘，退出请走托盘菜单');
+      _log('已接管关闭按钮：点 ✕ 弹出退出/后台选择');
     } catch (error) {
       _log('preventClose 设置失败：$error');
     }
@@ -394,13 +421,52 @@ class _TrayHostState extends ConsumerState<TrayHost> with WindowListener {
 
   @override
   void onWindowClose() {
-    unawaited(_hideToTray());
+    if (!_ownsPreventClose || _closeDialogShowing || !mounted) return;
+    _closeDialogShowing = true;
+    unawaited(_showCloseChoice());
+  }
+
+  Future<void> _showCloseChoice() async {
+    final bool? keepInBackground = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('关闭 HoH music'),
+          content: const Text('请选择关闭后的行为。'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('保留后台'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('退出程序'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) return;
+    _closeDialogShowing = false;
+
+    if (keepInBackground == true) {
+      await _hideToTray();
+    } else if (keepInBackground == false) {
+      _ownsPreventClose = false;
+      await quitAppGracefully();
+    }
   }
 
   Future<void> _hideToTray() async {
     try {
-      if (!await windowManager.isPreventClose()) return;
       await windowManager.hide();
+      _log('主窗口已隐藏，应用继续在后台运行');
     } catch (error) {
       _log('收进托盘失败：$error');
     }

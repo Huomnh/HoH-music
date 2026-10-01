@@ -19,9 +19,12 @@ import 'package:hoh_music/features/player/appearance_settings.dart';
 import 'package:hoh_music/features/player/cover_stage.dart';
 import 'package:hoh_music/features/player/cover_style.dart';
 import 'package:hoh_music/features/player/lyrics/lyrics_parser.dart';
+import 'package:hoh_music/features/player/lyrics/project_lyric_renderers.dart';
 import 'package:hoh_music/features/player/lyrics/lyrics_scene.dart';
 import 'package:hoh_music/features/player/lyrics/lyrics_style.dart';
+import 'package:hoh_music/features/player/lyrics/lyrics_timeline.dart';
 import 'package:hoh_music/features/player/lyrics/lyrics_view.dart';
+import 'package:hoh_music/features/player/lyrics/lyrics_visualizer.dart';
 import 'package:hoh_music/features/player/playback_settings.dart';
 import 'package:hoh_music/features/player/player_page.dart';
 import 'package:hoh_music/platforms/windows/debug_autoexit.dart';
@@ -87,8 +90,7 @@ void main() {
   testWidgets('播放页骨架可以正常构建', (WidgetTester tester) async {
     await _pumpApp(tester);
 
-    // 标题栏
-    expect(find.text('HoH music'), findsOneWidget);
+    // Windows 标题由原生 Win32 非客户区绘制，Flutter widget tree 中不再重复绘制。
     // 队列为空时应显示空状态而不是假数据。
     // 默认摄影机词幕只在左侧控制台显示空播放状态。
     expect(find.text('未在播放'), findsOneWidget);
@@ -97,7 +99,86 @@ void main() {
     expect(find.byType(VinylRecord), findsOneWidget);
     expect(find.byTooltip('上一首'), findsOneWidget);
     expect(find.byTooltip('下一首'), findsOneWidget);
-    expect(find.byTooltip('播放模式：顺序播放（点击切换）'), findsOneWidget);
+    expect(find.byTooltip('播放模式：列表循环（点击切换）'), findsOneWidget);
+    expect(find.byTooltip('展开歌词页'), findsOneWidget);
+    expect(find.byTooltip('关闭桌面歌词'), findsOneWidget);
+  });
+
+  testWidgets('HoH 歌词模式共用统一时间轴', (WidgetTester tester) async {
+    final LyricsTimeline timeline = LyricsTimeline(
+      lines: <LyricLine>[
+        LyricLine(Duration.zero, '首句歌词'),
+        LyricLine(const Duration(seconds: 4), '下一句歌词'),
+      ],
+    );
+    for (final LyricsLayoutMode mode in LyricsLayoutMode.values) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 960,
+              height: 520,
+              child: LyricsVisualizerStage(
+                mode: mode,
+                frame: LyricsVisualizerFrame(
+                  timeline: timeline,
+                  position: Duration.zero,
+                  currentIndex: 0,
+                  progress: 0,
+                ),
+                style: const LyricsStyle(),
+                accent: AppAccent.liquidBloom,
+                onSeek: (_) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(
+        find.byType(LyricsVisualizerStage),
+        findsOneWidget,
+        reason: mode.label,
+      );
+      expect(find.byType(ProjectLyricLine), findsWidgets, reason: mode.label);
+      expect(
+        find.byWidgetPredicate(
+          (Widget widget) =>
+              widget is CustomPaint &&
+              widget.painter is ProjectLyricLinePainter,
+        ),
+        findsWidgets,
+        reason: mode.label,
+      );
+    }
+  });
+
+  test('LRC 逐字进度估算可见，增强歌词采用真实词级时间', () {
+    final List<LyricGlyphTiming> estimated = buildLyricGlyphTimings(
+      text: 'ABCD',
+      words: const <LyricWord>[],
+      position: const Duration(seconds: 2),
+      lineProgress: .5,
+      lineDuration: const Duration(seconds: 4),
+    );
+    expect(estimated, hasLength(4));
+    expect(
+      estimated.map((LyricGlyphTiming timing) => timing.progress),
+      <double>[1, 1, 0, 0],
+    );
+
+    final List<LyricGlyphTiming> timed = buildLyricGlyphTimings(
+      text: '你好',
+      words: const <LyricWord>[
+        LyricWord(text: '你好', start: Duration.zero, end: Duration(seconds: 2)),
+      ],
+      position: const Duration(milliseconds: 500),
+      lineProgress: .25,
+      lineDuration: const Duration(seconds: 2),
+    );
+    expect(timed, hasLength(2));
+    expect(timed[0].progress, closeTo(.5, .001));
+    expect(timed[1].progress, 0);
   });
 
   test('从所有歌曲移除只持久化隐藏 ID，可撤销且不操作磁盘文件', () async {
@@ -173,9 +254,8 @@ void main() {
   testWidgets('设置页从侧边栏进入，内容显示在右侧主区（不是弹窗）', (WidgetTester tester) async {
     await _pumpApp(tester);
 
-    // 入口在侧边栏；标题栏的齿轮是同一页的快捷方式
+    // 入口在侧边栏；原生 Win32 标题栏不再重复放置 Flutter 齿轮按钮。
     expect(find.text('外观设置'), findsOneWidget);
-    expect(find.byTooltip('外观设置'), findsOneWidget);
 
     await tester.tap(find.text('外观设置'));
     await _settle(tester);
@@ -183,18 +263,21 @@ void main() {
     // 右侧主区换成了设置页：播放页的曲目信息不再显示，
     // 但左侧控制台是常驻的，它那句「未在播放」还在（0.0.21）
     expect(find.text('未在播放'), findsOneWidget);
-    expect(find.byTooltip('返回播放页'), findsOneWidget);
 
     // 背景组（0.0.11 新增）
     expect(find.text('背景'), findsOneWidget);
     expect(find.text('自定义图片'), findsOneWidget);
 
     // 0.0.8 精简后**当前确实存在**的项
-    expect(find.text('模糊与通透'), findsOneWidget);
+    expect(find.text('Liquid Glass Plus'), findsOneWidget);
     expect(find.text('边框高光'), findsOneWidget);
-    expect(find.text('模糊强度'), findsOneWidget);
+    expect(find.text('玻璃厚度'), findsOneWidget);
+    expect(find.text('磨砂强度'), findsOneWidget);
+    expect(find.text('折射率'), findsOneWidget);
+    expect(find.text('色散强度'), findsOneWidget);
+    expect(find.text('Skia 回退折射'), findsOneWidget);
     expect(find.text('高光强度'), findsOneWidget);
-    expect(find.text('玻璃通透度'), findsOneWidget);
+    expect(find.text('玻璃染色强度'), findsOneWidget);
     expect(find.text('玻璃效果'), findsOneWidget);
     expect(find.text('边框高光流动'), findsOneWidget);
     expect(find.text('界面动画'), findsOneWidget);
@@ -324,19 +407,13 @@ void main() {
       playerControllerProvider.notifier,
     );
 
-    // 默认顺序播放
-    expect(
-      container.read(playerControllerProvider).mode,
-      PlaybackMode.sequential,
-    );
-
-    // 顺序 → 列表循环 → 单曲循环 → 随机 → 顺序
-    controller.cyclePlaybackMode();
-    await _settle(tester);
+    // 默认列表循环
     expect(
       container.read(playerControllerProvider).mode,
       PlaybackMode.repeatAll,
     );
+
+    // 列表循环 → 单曲循环 → 随机 → 顺序播放 → 列表循环
     controller.cyclePlaybackMode();
     await _settle(tester);
     expect(
@@ -352,13 +429,19 @@ void main() {
       container.read(playerControllerProvider).mode,
       PlaybackMode.sequential,
     );
+    controller.cyclePlaybackMode();
+    await _settle(tester);
+    expect(
+      container.read(playerControllerProvider).mode,
+      PlaybackMode.repeatAll,
+    );
 
     // 只有一个模式按钮（不再有独立的随机 + 循环两个）
-    expect(find.byTooltip('播放模式：顺序播放（点击切换）'), findsOneWidget);
+    expect(find.byTooltip('播放模式：列表循环（点击切换）'), findsOneWidget);
 
     // 模式会写盘
     final SharedPreferences prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('playback.mode'), PlaybackMode.sequential.name);
+    expect(prefs.getString('playback.mode'), PlaybackMode.repeatAll.name);
   });
 
   testWidgets('歌词面板：没有曲目时显示占位而不是假歌词（0.0.16）', (WidgetTester tester) async {
@@ -478,21 +561,19 @@ void main() {
     expect(style.lineExtent, closeTo(style.activeFontSize * 2.4, 0.01));
   });
 
-  testWidgets('播放页：方形封面留在主区，黑胶在侧边栏控制台上（0.0.21 ~ 0.0.22）', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('歌词模式切换只切换前端呈现且控制台不变', (WidgetTester tester) async {
     await _pumpApp(tester);
 
-    // 默认摄影机词幕不渲染专辑封面；滚动列表布局会显示封面与信息栏。
+    // 默认使用统一歌词时间轴的原生视觉器。
     expect(find.byType(LyricsScene), findsOneWidget);
     final ProviderContainer container = ProviderScope.containerOf(
       tester.element(find.byType(PlayerPage)),
     );
     await container
         .read(lyricsStyleProvider.notifier)
-        .setLayout(LyricsLayoutMode.scrollingList);
+        .setLayout(LyricsLayoutMode.ripple);
     await tester.pump();
-    expect(find.byType(CoverStage), findsOneWidget);
+    expect(find.byType(LyricsScene), findsOneWidget);
     // 黑胶在侧边栏顶部的控制台里（0.0.22 从 76 收到 60，用户嫌整体太大）
     expect(find.byType(VinylRecord), findsOneWidget);
     final VinylRecord disc = tester.widget<VinylRecord>(
@@ -505,7 +586,7 @@ void main() {
 
     // 0.0.22：模式按钮挪到曲名那一行（黑胶所在 Row 的右端），
     // 走带按键（上/下首 + 播放）单独居中一行
-    expect(find.byTooltip('播放模式：顺序播放（点击切换）'), findsOneWidget);
+    expect(find.byTooltip('播放模式：列表循环（点击切换）'), findsOneWidget);
     expect(find.byTooltip('上一首'), findsOneWidget);
     expect(find.byTooltip('下一首'), findsOneWidget);
 
@@ -518,7 +599,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byElementPredicate((Element e) => e == transportRow),
-        matching: find.byTooltip('播放模式：顺序播放（点击切换）'),
+        matching: find.byTooltip('播放模式：列表循环（点击切换）'),
       ),
       findsOneWidget,
       reason: '播放模式按钮应该在走带那一行的「下一首」右边',

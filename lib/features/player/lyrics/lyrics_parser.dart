@@ -37,12 +37,17 @@ class LyricLine {
   const LyricLine(
     this.time,
     this.text, {
+    this.end,
     this.translation,
     this.words = const <LyricWord>[],
   });
 
   /// 该行出现的时刻。
   final Duration time;
+
+  /// 歌词源明确提供的结束时间（TTML 等逐词格式）。LRC 没有该字段，
+  /// 时间轴会按下一行或最后一个词回退计算。
+  final Duration? end;
 
   /// 歌词文本。
   final String text;
@@ -62,7 +67,7 @@ class LyricLine {
 
   /// 带翻译的一行（用于浮层显示）。
   LyricLine withTranslation(String? value) =>
-      LyricLine(time, text, translation: value, words: words);
+      LyricLine(time, text, end: end, translation: value, words: words);
 
   @override
   String toString() =>
@@ -290,11 +295,14 @@ class Lyrics {
       if (value.isEmpty) continue;
       final Duration? end = _parseTtmlTime(pAttrs['end']);
       lines.add(
-        LyricLine(start, value, translation: translation, words: words),
+        LyricLine(
+          start,
+          value,
+          end: end,
+          translation: translation,
+          words: words,
+        ),
       );
-      // The paragraph end is intentionally not stored in LyricLine yet; the
-      // next line timestamp remains a reliable fallback for line progress.
-      end; // keep parsing explicit for future end-aware scenes.
     }
     lines.sort((LyricLine a, LyricLine b) => a.time.compareTo(b.time));
     return Lyrics(lines: lines);

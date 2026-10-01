@@ -10,22 +10,25 @@ library;
 
 import 'dart:convert';
 
-/// 平台标识 → 中文名。
+import 'platform_aliases.dart';
+
+/// 平台标识 → HoH music 界面显示名。
 ///
 /// 这些 key 是 LX 生态的通用写法（音源脚本的 `sources` 里就用它们）。
 const Map<String, String> kPlatformLabels = <String, String>{
-  'wy': '网易云',
-  'tx': 'QQ音乐',
-  'kw': '酷我',
-  'kg': '酷狗',
-  'mg': '咪咕',
+  'wy': '芸音',
+  'tx': '鹅音',
+  'kw': '沃音',
+  'kg': '苟音',
+  'mg': '菇音',
   'qs': '汽水',
   'qsvip': '汽水VIP',
   'local': '本地',
 };
 
 /// 平台标识 → 展示名（未知的平台原样返回）。
-String platformLabel(String key) => kPlatformLabels[key] ?? key;
+String platformLabel(String key) =>
+    kPlatformLabels[key] ?? platformDisplayAlias(key);
 
 /// 音质标识 → 展示名。
 const Map<String, String> kQualityLabels = <String, String>{

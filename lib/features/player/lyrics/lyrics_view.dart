@@ -21,6 +21,8 @@ import '../../../shared/theme/app_accent.dart';
 import '../../../shared/theme/app_colors.dart';
 import 'lyrics_parser.dart';
 import 'lyrics_style.dart';
+import 'lyrics_timeline.dart';
+import 'project_lyric_renderers.dart';
 
 /// 当前曲目的歌词。没有曲目 / 找不到歌词时为 `null`。
 ///
@@ -93,7 +95,7 @@ class LyricsPanel extends ConsumerStatefulWidget {
   /// 创建面板。
   const LyricsPanel({super.key, this.centered = false});
 
-  /// 滚动列表布局在宽屏播放页使用居中排版，避免跟随旧的靠右偏好挤在一侧。
+  /// 普通歌词面板在宽屏辅助视图使用居中排版，避免跟随旧的靠右偏好挤在一侧。
   final bool centered;
 
   @override
@@ -137,15 +139,19 @@ class _LyricsPanelState extends ConsumerState<LyricsPanel> {
             lyrics.indexAt(position.value ?? Duration.zero),
       ),
     );
-    // 逐字高亮不需要每个音频 tick 重绘；100ms 一拍足够平滑，也避免整张
-    // ListView 和可见歌词阴影在高频进度流下反复光栅化。
+    // 滚动列表保留独立的 30Hz 更新上限：比旧版 10Hz 连续很多，
+    // 又不会像主舞台的 60Hz 时钟一样让整张 ListView 反复布局。
     final int positionMs = ref.watch(
       playbackPositionProvider.select(
         (AsyncValue<Duration> value) =>
-            ((value.value ?? Duration.zero).inMilliseconds ~/ 100) * 100,
+            ((value.value ?? Duration.zero).inMilliseconds ~/ 33) * 33,
       ),
     );
     final Duration position = Duration(milliseconds: positionMs);
+    final LyricsTimeline timeline = LyricsTimeline.fromLyrics(
+      lyrics,
+      source: 'hoh-normalized',
+    );
 
     _scheduleAutoScroll(index, style);
 
@@ -160,33 +166,20 @@ class _LyricsPanelState extends ConsumerState<LyricsPanel> {
         itemBuilder: (BuildContext context, int i) {
           return _LyricLineTile(
             key: _lineKeys.putIfAbsent(i, GlobalKey.new),
-            text: lyrics.lines[i].text,
-            translation: lyrics.lines[i].translation,
+            line: lyrics.lines[i],
             active: i == index,
             centered: widget.centered,
             style: style,
             accent: accent,
-            wordProgress: _lineProgress(lyrics, index, position),
+            position: position,
+            wordProgress: timeline.progressAt(i, position),
+            lineDuration: timeline.endAt(i) - lyrics.lines[i].time,
             onTap: () => ref
                 .read(playerControllerProvider.notifier)
                 .seek(lyrics.lines[i].time),
           );
         },
       ),
-    );
-  }
-
-  double _lineProgress(Lyrics lyrics, int index, Duration position) {
-    if (index < 0 || index >= lyrics.lines.length) return 0;
-    final Duration start = lyrics.lines[index].time;
-    final Duration end = index + 1 < lyrics.lines.length
-        ? lyrics.lines[index + 1].time
-        : start + const Duration(seconds: 5);
-    final int span = end.inMilliseconds - start.inMilliseconds;
-    if (span <= 0) return 1;
-    return ((position.inMilliseconds - start.inMilliseconds) / span).clamp(
-      0.0,
-      1.0,
     );
   }
 
@@ -215,23 +208,25 @@ class _LyricsPanelState extends ConsumerState<LyricsPanel> {
 class _LyricLineTile extends StatefulWidget {
   const _LyricLineTile({
     super.key,
-    required this.text,
-    required this.translation,
+    required this.line,
     required this.active,
     required this.centered,
     required this.style,
     required this.accent,
     required this.wordProgress,
+    required this.position,
+    required this.lineDuration,
     required this.onTap,
   });
 
-  final String text;
-  final String? translation;
+  final LyricLine line;
   final bool active;
   final bool centered;
   final LyricsStyle style;
   final AppAccent accent;
   final double wordProgress;
+  final Duration position;
+  final Duration lineDuration;
   final VoidCallback onTap;
 
   @override
@@ -239,14 +234,10 @@ class _LyricLineTile extends StatefulWidget {
 }
 
 class _LyricLineTileState extends State<_LyricLineTile> {
-  bool _hovered = false;
-
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
         child: Align(
@@ -255,72 +246,51 @@ class _LyricLineTileState extends State<_LyricLineTile> {
               : widget.style.align.alignment,
           child: AnimatedDefaultTextStyle(
             duration: const Duration(milliseconds: 140),
-            style: TextStyle(
-              fontSize: widget.active
-                  ? widget.style.activeFontSize
-                  : widget.style.fontSize,
-              fontFamily: widget.style.fontFamily.family,
-              letterSpacing: widget.style.letterSpacing,
-              fontWeight: widget.active
-                  ? widget.style.weight.value
-                  : FontWeight.w400,
-              height: 1.25,
-              color: widget.active
-                  ? Colors.white
-                  : (_hovered
-                        ? Colors.white.withValues(alpha: 0.92)
-                        : Colors.white.withValues(alpha: 0.62)),
-              shadows: widget.active
-                  ? <Shadow>[
-                      Shadow(
-                        color: widget.accent.primary.withValues(alpha: 0.55),
-                        blurRadius: 16,
-                      ),
-                      const Shadow(color: Color(0xB3000000), blurRadius: 8),
-                    ]
-                  : const <Shadow>[
-                      // 非当前行也给一层暗影：歌词常叠在亮背景上，
-                      // 没有它 60% 白的字会糊掉（用户反馈"看着难受"）
-                      Shadow(color: Color(0x99000000), blurRadius: 6),
-                    ],
-            ),
+            style: const TextStyle(height: 1.25),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                widget.active
-                    ? _karaokeText(
-                        widget.text,
-                        widget.wordProgress,
-                        widget.centered
-                            ? TextAlign.center
-                            : widget.style.align.textAlign,
-                        widget.accent.primary,
-                      )
-                    : Text(
-                        widget.text,
-                        textAlign: widget.centered
-                            ? TextAlign.center
-                            : widget.style.align.textAlign,
-                      ),
-                if (widget.translation != null &&
-                    widget.translation!.isNotEmpty)
-                  Text(
-                    widget.translation!,
-                    textAlign: widget.centered
-                        ? TextAlign.center
-                        : widget.style.align.textAlign,
-                    style: TextStyle(
-                      fontSize:
-                          (widget.active
-                              ? widget.style.activeFontSize
-                              : widget.style.fontSize) *
-                          0.72,
-                      color: Colors.white.withValues(alpha: 0.56),
-                      fontFamily: widget.style.fontFamily.family,
-                      letterSpacing: widget.style.letterSpacing * 0.7,
-                      fontWeight: FontWeight.w400,
-                      height: 1.25,
-                    ),
+                ProjectLyricLine(
+                  text: widget.line.text,
+                  words: widget.active
+                      ? widget.line.words
+                      : const <LyricWord>[],
+                  position: widget.position,
+                  progress: widget.wordProgress,
+                  lineDuration: widget.lineDuration,
+                  style: widget.centered
+                      ? widget.style.copyWith(align: LyricAlign.center)
+                      : widget.style,
+                  mode: widget.style.layout,
+                  accent: widget.accent.primary,
+                  active: widget.active,
+                  opacity: widget.active ? 1 : .62,
+                ),
+                if (widget.line.translation?.trim().isNotEmpty ?? false)
+                  ProjectLyricLine(
+                    text: widget.line.translation!.trim(),
+                    words: const <LyricWord>[],
+                    position: widget.position,
+                    progress: widget.wordProgress,
+                    lineDuration: widget.lineDuration,
+                    style:
+                        (widget.centered
+                                ? widget.style.copyWith(
+                                    align: LyricAlign.center,
+                                  )
+                                : widget.style)
+                            .copyWith(
+                              fontSize: (widget.style.fontSize * .72).clamp(
+                                12.0,
+                                20.0,
+                              ),
+                              weight: LyricWeight.regular,
+                              lyricsOpacity: widget.style.subtitleOpacity,
+                            ),
+                    mode: widget.style.layout,
+                    accent: widget.accent.primary,
+                    active: widget.active,
+                    opacity: widget.active ? 1 : .58,
                   ),
               ],
             ),
@@ -329,32 +299,6 @@ class _LyricLineTileState extends State<_LyricLineTile> {
       ),
     );
   }
-}
-
-Widget _karaokeText(
-  String text,
-  double progress,
-  TextAlign align,
-  Color accent,
-) {
-  // 按文本的水平进度连续扫亮，而不是按字符取整；这样中文、英文和混合歌词
-  // 都像播放器进度条一样平滑，光标不会出现“一个字一个字跳”的感觉。
-  final double p = progress.clamp(0.0, 1.0);
-  final double edge = (p + 0.003).clamp(0.0, 1.0);
-  return ShaderMask(
-    blendMode: BlendMode.srcIn,
-    shaderCallback: (Rect bounds) => LinearGradient(
-      colors: <Color>[accent, accent, Colors.white, Colors.white],
-      stops: <double>[0, p, edge, 1],
-    ).createShader(bounds),
-    child: Text(
-      text,
-      textAlign: align,
-      softWrap: true,
-      overflow: TextOverflow.visible,
-      style: const TextStyle(color: Colors.white),
-    ),
-  );
 }
 
 /// 没有歌词时的占位。

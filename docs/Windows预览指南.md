@@ -40,7 +40,7 @@ flutter build windows --debug
 1. `flutter analyze` 无错误。
 2. `flutter test` 全量通过，不能将历史断言失败当作预期通过。
 3. `flutter build windows --release` 成功，检查产物依赖和安装/启动。
-4. 在干净 Windows 用户配置下测试首次启动、关闭、设置保存、导入音乐、播放/暂停/切歌、歌词、下载及托盘退出。
+4. 在干净 Windows 用户配置下测试首次启动、重复启动只唤回一个窗口、点击原生关闭按钮时是否出现“取消 / 保留后台 / 退出程序”选择、托盘退出、设置保存、导入音乐、播放/暂停/切歌、进度条拖动、歌词（含长句、翻译、放大字号时不应出现 BOTTOM OVERFLOWED）、下载及退出后进程是否消失。runner 创建阶段使用 `WS_OVERLAPPEDWINDOW` 标准原生标题栏，系统负责顶部程序框和窗口按钮；紧凑播放器从侧栏“紧凑播放器”进入，外框为 360×316。初始外框为 1280×800，不再使用 WindowFrameSync 或 Flutter 自绘标题栏；lib/app.dart 同时隔离 Flutter 语义树，以规避 Flutter 3.47.5 accessibility bridge 的 AXTree 崩溃。
 5. 核验版本显示 `0.1.0-beta.1`、安装包文件名/架构、许可证和第三方依赖清单。
 6. 正式公开分发前，用可信代码签名证书签署安装器并验证签名；当前生成的 beta 安装器未签名。
 
@@ -50,5 +50,6 @@ flutter build windows --debug
 - **Rust 插件失败**：确认 `rustc --version` 和 `cargo --version` 可运行，重新打开终端后再构建；错误仍存在时记录完整 CMake/MSBuild 输出。
 - **媒体归档校验失败**：重新运行项目的准备脚本，核对其校验输出；不要从未知来源复制 DLL 到发布目录。
 - **源码分析成功但测试失败**：分析与测试覆盖范围不同；修复/迁移失败断言后才能将 beta 标记为可发布。
+- **Debug 启动后闪退**：确认使用本轮构建的 `build\windows\x64\runner\Debug\hoh_music.exe`，不要把旧 exe 与新 DLL 混用；本轮已用普通启动 15 秒和 `--exit-after=12` 回归，退出码应为 `0`。若升级 Flutter 后重新出现 `flutter_windows.dll` 的 AXTree 崩溃，先检查 `lib/app.dart` 的 Windows `ExcludeSemantics` 是否被删除，再记录 Flutter 版本与 Windows Application Error。
 
 构建产物位于 `build\windows\`，属于本地生成文件，不是仓库源文件。当前其他平台没有完整工程，见 [多平台构建可行性评估](多平台构建可行性.md)。

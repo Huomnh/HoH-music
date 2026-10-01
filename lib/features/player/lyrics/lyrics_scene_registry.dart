@@ -25,16 +25,16 @@ class LyricsSceneDefinition {
   final LyricsSceneBuilder builder;
 }
 
-final List<LyricsSceneDefinition> lyricsSceneRegistry = <LyricsSceneDefinition>[
-  LyricsSceneDefinition(
-    mode: LyricsLayoutMode.flowline,
-    label: '流线词幕',
-    builder: ({required VoidCallback onShowLyrics}) => LyricsScene(
-      mode: LyricsLayoutMode.flowline,
-      onShowLyrics: onShowLyrics,
-    ),
-  ),
-];
+final List<LyricsSceneDefinition> lyricsSceneRegistry = LyricsLayoutMode.values
+    .map(
+      (LyricsLayoutMode mode) => LyricsSceneDefinition(
+        mode: mode,
+        label: mode.label,
+        builder: ({required VoidCallback onShowLyrics}) =>
+            LyricsScene(mode: mode, onShowLyrics: onShowLyrics),
+      ),
+    )
+    .toList(growable: false);
 
 LyricsSceneDefinition? lyricsSceneDefinitionFor(LyricsLayoutMode mode) {
   for (final LyricsSceneDefinition definition in lyricsSceneRegistry) {

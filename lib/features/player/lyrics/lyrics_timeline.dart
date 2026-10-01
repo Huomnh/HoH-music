@@ -44,8 +44,19 @@ class LyricsTimeline {
 
   Duration endAt(int index) {
     if (index < 0 || index >= lines.length) return Duration.zero;
-    if (index + 1 < lines.length) return lines[index + 1].time;
-    return lines[index].time + const Duration(seconds: 5);
+    final LyricLine line = lines[index];
+    final Duration? authoredEnd = line.end;
+    if (authoredEnd != null && authoredEnd > line.time) return authoredEnd;
+    if (index + 1 < lines.length && lines[index + 1].time > line.time) {
+      return lines[index + 1].time;
+    }
+    if (line.words.isNotEmpty) {
+      final Duration wordEnd = line.words
+          .map((LyricWord word) => word.end)
+          .reduce((Duration a, Duration b) => a > b ? a : b);
+      if (wordEnd > line.time) return wordEnd;
+    }
+    return line.time + const Duration(seconds: 5);
   }
 
   double progressAt(int index, Duration position) {

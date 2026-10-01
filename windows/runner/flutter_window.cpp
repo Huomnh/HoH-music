@@ -63,7 +63,11 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
 
   switch (message) {
     case WM_FONTCHANGE:
-      flutter_controller_->engine()->ReloadSystemFonts();
+      // WM_FONTCHANGE 可能在窗口销毁后才抵达；此时 Flutter controller
+      // 已释放，不能再把消息转交给空引擎。
+      if (flutter_controller_ && flutter_controller_->engine()) {
+        flutter_controller_->engine()->ReloadSystemFonts();
+      }
       break;
   }
 

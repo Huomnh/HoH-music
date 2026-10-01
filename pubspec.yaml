@@ -65,7 +65,7 @@ dependencies:
 
   # ── 平台能力（导入音源文件）────────────────────────────────────
   file_picker: ^13.1.0
-
+  liquid_glass_plus: ^0.3.2
 dev_dependencies:
   flutter_test:
     sdk: flutter

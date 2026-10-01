@@ -217,7 +217,45 @@ class _TrackList extends ConsumerWidget {
           removeFromPlaylistId: removeFromPlaylistId,
           // 曲库页面（所有歌曲 / 专辑 / 歌手 / 歌单 / 我的喜欢）是
           // **替换队列**并播放这一份内容（用户要求的语义）。
-          onTap: () => playPoolTracks(ref, tracks, startIndex: index),
+          onTap: () async {
+            try {
+              final bool resolvingOnline = tracks.any(
+                (Track item) => item.isRemote && item.uri.isEmpty,
+              );
+              if (resolvingOnline) {
+                ScaffoldMessenger.of(context)
+                  ..hideCurrentSnackBar()
+                  ..showSnackBar(
+                    const SnackBar(
+                      content: Text('正在匹配歌单并准备完整播放队列…'),
+                      duration: Duration(minutes: 2),
+                    ),
+                  );
+              }
+              final PoolPlayResult result = await playPoolTracks(
+                ref,
+                tracks,
+                startIndex: index,
+              );
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              if (result.failed.isEmpty) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    result.played == 0
+                        ? '播放失败：${result.failed.take(2).join('；')}'
+                        : '部分歌曲无法播放：${result.failed.take(2).join('；')}',
+                  ),
+                  duration: const Duration(seconds: 5),
+                ),
+              );
+            } catch (error) {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text('播放失败：$error')));
+            }
+          },
         );
       },
     );

@@ -52,6 +52,43 @@ class PoolPlayResult {
   bool get ok => played > 0 && failed.isEmpty;
 }
 
+/// 歌单的“待解析队列”。队列先展示完整曲目，但在线地址只在播放某一首时解析。
+class PendingPlaylist {
+  const PendingPlaylist({required this.tracks, this.activeIndex = -1});
+
+  final List<Track> tracks;
+  final int activeIndex;
+
+  PendingPlaylist copyWith({List<Track>? tracks, int? activeIndex}) =>
+      PendingPlaylist(
+        tracks: tracks ?? this.tracks,
+        activeIndex: activeIndex ?? this.activeIndex,
+      );
+}
+
+class PendingPlaylistController extends Notifier<PendingPlaylist?> {
+  int _requestSerial = 0;
+
+  @override
+  PendingPlaylist? build() => null;
+
+  void setPending(PendingPlaylist? value) => state = value;
+
+  int beginRequest() => ++_requestSerial;
+
+  bool isCurrent(int request, int index) =>
+      request == _requestSerial && state?.activeIndex == index;
+}
+
+final pendingPlaylistProvider =
+    NotifierProvider<PendingPlaylistController, PendingPlaylist?>(
+      PendingPlaylistController.new,
+    );
+
+int _targetGeneration = 0;
+final Map<String, Future<OnlineTrack>> _matchingInFlight =
+    <String, Future<OnlineTrack>>{};
+
 /// 播放池子里的曲目。
 ///
 /// [append] = true → 追加到队列（搜索 / WebDAV / 其他来源）；
@@ -65,6 +102,8 @@ Future<PoolPlayResult> playPoolTracks(
   String? quality,
   void Function(int done, int total, String title)? onProgress,
 }) async {
+  _targetGeneration++;
+  tracks = _dedupePoolTracks(tracks);
   if (tracks.isEmpty) return const PoolPlayResult();
 
   // 0.0.41 快路径：**队列已经是这份内容就只跳过去**，不重建播放列表。
@@ -95,8 +134,11 @@ Future<PoolPlayResult> playPoolTracks(
   final List<Track> ready = <Track>[];
   final List<String> failed = <String>[];
   final List<String> providers = <String>[];
-  // 曲库页播放时先"欠着"的在线曲目（播放开始后再后台解析）
+  // 曲库页播放时需要现搜索/解析的在线曲目
   final List<OnlineTrack> pendingOnline = <OnlineTrack>[];
+  final String clickedId = (startIndex >= 0 && startIndex < tracks.length)
+      ? tracks[startIndex].id
+      : '';
 
   for (int i = 0; i < tracks.length; i++) {
     final Track track = tracks[i];
@@ -144,8 +186,7 @@ Future<PoolPlayResult> playPoolTracks(
     // ⚠️ 0.0.43 性能修复：从「所有歌曲」点歌时**不要**在这里解析。
     // 池子里有几十首在线曲目，逐个解析 = 点一下要等十几秒
     //（用户反馈："所有歌曲里选中播放的速度很慢"）。
-    // 现在：曲库页（!append）先只播**不需要解析**的本地/网盘曲目，
-    // 在线曲目收集起来，等播放开始后在后台解析并追加进队列。
+    // 曲库页（!append）把在线曲目收集起来，稍后统一解析，确保打开队列时完整。
     final OnlineTrack? online = onlineById[track.id];
     if (online == null) {
       failed.add('${track.title}：找不到这首的来源信息');
@@ -192,17 +233,34 @@ Future<PoolPlayResult> playPoolTracks(
 
   onProgress?.call(tracks.length, tracks.length, '');
 
-  // 后台把"欠着"的在线曲目解析出来，追加到队列末尾（不打断当前播放）。
-  // 这样点歌是**立刻**开始响的，在线那几十首慢慢补。
-  if (pendingOnline.isNotEmpty) {
-    unawaited(
-      _appendOnlineInBackground(
-        ref,
-        pendingOnline,
-        host: host,
-        quality: quality,
-      ),
+  // 歌单播放规则：播放器队列面板先展示完整歌单；只匹配并解析被点击的歌曲。
+  // 手动点队列下一首或当前曲目播放完成后，再按需解析对应曲目。
+  if (!append && pendingOnline.isNotEmpty) {
+    final List<Track> pendingTracks = <Track>[
+      for (final Track track in tracks) track,
+    ];
+    ref
+        .read(pendingPlaylistProvider.notifier)
+        .setPending(
+          PendingPlaylist(tracks: pendingTracks, activeIndex: startIndex),
+        );
+    final PoolPlayResult first = await playPendingPlaylistTrack(
+      ref,
+      pendingTracks,
+      startIndex,
+      quality: quality,
     );
+    return PoolPlayResult(
+      played: first.played,
+      failed: first.failed,
+      providers: first.providers,
+    );
+  }
+
+  // 非在线待解析歌单播放时，清掉上一张歌单的按需状态，避免队列抽屉
+  // 或下一首按钮继续引用旧歌单。
+  if (!append) {
+    ref.read(pendingPlaylistProvider.notifier).setPending(null);
   }
 
   if (ready.isEmpty) {
@@ -214,9 +272,6 @@ Future<PoolPlayResult> playPoolTracks(
   //    它们不进 `ready`（本地/网盘优先播）—— 直接拿池子下标去点 ready，
   //    就会"点第 60 行，播的却是第 60 个能直接播的"，看着像随机乱播。
   //    用户反馈"随机播放下选歌不是选中那首、放几首后又正常"就是这个。
-  final String clickedId = (startIndex >= 0 && startIndex < tracks.length)
-      ? tracks[startIndex].id
-      : '';
   int readyIndex = clickedId.isEmpty
       ? 0
       : ready.indexWhere((Track t) => t.id == clickedId);
@@ -234,7 +289,7 @@ Future<PoolPlayResult> playPoolTracks(
   }
 
   // 所有歌曲通常都是本地文件：首播只打开点中的文件，避免一次性构建
-  // 几百首 Playlist 把第一声音乐拖到很晚；剩余歌曲由播放器后台补齐。
+  // 几百首 Playlist 把第一声音乐拖到很晚；在线歌单则已在上方补齐完整队列。
   if (!append &&
       pendingOnline.isEmpty &&
       ready.every((Track t) => !t.isRemote && t.uri.isNotEmpty)) {
@@ -252,35 +307,6 @@ Future<PoolPlayResult> playPoolTracks(
     playerControllerProvider.notifier,
   );
 
-  // 点的如果是"需要现解析"的在线曲目：**只解析这一首**，立刻播它，
-  // 其余在线曲目仍旧后台补（"点啥放啥"，且不用等几十次网络请求）。
-  for (final OnlineTrack pending in pendingOnline) {
-    if (pending.id != clickedId) continue;
-    final SourceResolveResult resolved = await host.resolveMusicUrl(
-      pending,
-      quality: quality,
-    );
-    if (resolved.ok && resolved.url.isNotEmpty) {
-      await controller.playRemoteTracks(<Track>[
-        Track(
-          id: pending.id,
-          uri: resolved.url,
-          title: pending.title,
-          artist: pending.artist,
-          album: pending.album,
-          duration: pending.duration == Duration.zero ? null : pending.duration,
-          isRemote: true,
-          formatOverride: '',
-          source: pending.platformLabel,
-          genre: pending.tags.isEmpty ? null : pending.tags.first,
-          quality: quality ?? pending.quality,
-        ),
-      ], httpHeaders: _kUaHeaders);
-      return PoolPlayResult(played: 1, providers: <String>[resolved.provider]);
-    }
-    failed.add('${pending.title}：${resolved.error}');
-    break;
-  }
   // ⚠️ WebDAV 要带 Basic 鉴权头，在线直链只要个正常 UA —— **不能混在一个批次里**，
   //    否则会把网盘账号密码发给第三方 CDN。
   final List<Track> davTracks = ready
@@ -381,6 +407,116 @@ Future<PoolPlayResult> playPoolTracks(
   );
 }
 
+/// 只解析并播放待解析队列中的一首。下一首由自动播放、控制栏下一首或队列点击调用。
+Future<PoolPlayResult> playPendingPlaylistTrack(
+  WidgetRef ref,
+  List<Track> tracks,
+  int index, {
+  String? quality,
+}) async {
+  if (index < 0 || index >= tracks.length) {
+    return const PoolPlayResult(failed: <String>['歌曲位置无效']);
+  }
+  final Track sourceTrack = tracks[index];
+  final PendingPlaylistController pendingController = ref.read(
+    pendingPlaylistProvider.notifier,
+  );
+  final int request = pendingController.beginRequest();
+  final int generation = ++_targetGeneration;
+  pendingController.setPending(
+    PendingPlaylist(tracks: tracks, activeIndex: index),
+  );
+  if (sourceTrack.uri.isNotEmpty) {
+    await ref.read(playerControllerProvider.notifier).playRemoteTracks(<Track>[
+      sourceTrack,
+    ], httpHeaders: _kUaHeaders);
+    unawaited(
+      _prefetchAdjacentPending(
+        ref,
+        tracks,
+        index,
+        generation: generation,
+        quality: quality,
+      ),
+    );
+    return const PoolPlayResult(played: 1);
+  }
+  final OnlineTrack? online = ref
+      .read(onlineLibraryProvider)
+      .value
+      ?.where((OnlineTrack t) => t.id == sourceTrack.id)
+      .firstOrNull;
+  if (online == null) {
+    return PoolPlayResult(failed: <String>['${sourceTrack.title}：找不到在线来源信息']);
+  }
+  final OnlineTrack prepared = await _prepareOnlineTrack(ref, online);
+  final SourceResolveResult resolved = await ref
+      .read(sourceHostProvider.notifier)
+      .resolveMusicUrl(prepared, quality: quality);
+  if (!resolved.ok || resolved.url.isEmpty) {
+    return PoolPlayResult(
+      failed: <String>['${prepared.title}：${resolved.error}'],
+    );
+  }
+  if (!pendingController.isCurrent(request, index)) {
+    return const PoolPlayResult(failed: <String>['已切换到新的目标歌曲']);
+  }
+  final Track playable = _remoteTrack(prepared, resolved.url, quality: quality);
+  final List<Track> nextTracks = List<Track>.of(tracks)..[index] = playable;
+  ref
+      .read(pendingPlaylistProvider.notifier)
+      .setPending(PendingPlaylist(tracks: nextTracks, activeIndex: index));
+  await ref.read(playerControllerProvider.notifier).playRemoteTracks(<Track>[
+    playable,
+  ], httpHeaders: _kUaHeaders);
+  unawaited(
+    _prefetchAdjacentPending(
+      ref,
+      nextTracks,
+      index,
+      generation: generation,
+      quality: quality,
+    ),
+  );
+  return PoolPlayResult(played: 1, providers: <String>[resolved.provider]);
+}
+
+Future<void> _prefetchAdjacentPending(
+  WidgetRef ref,
+  List<Track> tracks,
+  int activeIndex, {
+  required int generation,
+  String? quality,
+}) async {
+  for (final int index in <int>[activeIndex - 1, activeIndex + 1]) {
+    if (generation != _targetGeneration) return;
+    if (index < 0 || index >= tracks.length || tracks[index].uri.isNotEmpty) {
+      continue;
+    }
+    final OnlineTrack? online = ref
+        .read(onlineLibraryProvider)
+        .value
+        ?.where((OnlineTrack t) => t.id == tracks[index].id)
+        .firstOrNull;
+    if (online == null) continue;
+    final OnlineTrack prepared = await _prepareOnlineTrack(ref, online);
+    final SourceResolveResult result = await ref
+        .read(sourceHostProvider.notifier)
+        .resolveMusicUrl(prepared, quality: quality);
+    if (generation != _targetGeneration) return;
+    if (!result.ok || result.url.isEmpty) continue;
+    final PendingPlaylist? current = ref.read(pendingPlaylistProvider);
+    if (current == null || current.tracks.length != tracks.length) return;
+    final List<Track> updated = List<Track>.of(current.tracks)
+      ..[index] = _remoteTrack(prepared, result.url, quality: quality);
+    ref
+        .read(pendingPlaylistProvider.notifier)
+        .setPending(
+          PendingPlaylist(tracks: updated, activeIndex: current.activeIndex),
+        );
+  }
+}
+
 /// 两份列表是不是同一批曲目（按 id 顺序比）。
 bool _sameIds(List<Track> a, List<Track> b) {
   if (a.length != b.length || a.isEmpty) return false;
@@ -390,44 +526,86 @@ bool _sameIds(List<Track> a, List<Track> b) {
   return true;
 }
 
-/// 后台解析在线曲目并追加到队列（曲库页点歌后的"补货"）。
-///
-/// 为什么不在播放前做：每首要发 1~2 个网络请求，几十首就是十几秒，
-/// 用户点一下歌要等这么久（0.0.43 用户反馈的就是这个）。
-Future<void> _appendOnlineInBackground(
+/// 导入歌单的曲目没有搜索结果里的平台扩展字段，首次播放时按需补全。
+Future<OnlineTrack> _prepareOnlineTrack(
   WidgetRef ref,
-  List<OnlineTrack> online, {
-  required SourceHostController host,
-  String? quality,
-}) async {
-  final List<Track> resolved = <Track>[];
-  for (final OnlineTrack t in online) {
-    final SourceResolveResult result = await host.resolveMusicUrl(
-      t,
-      quality: quality,
-    );
-    if (!result.ok || result.url.isEmpty) continue;
-    resolved.add(
-      Track(
-        id: t.id,
-        uri: result.url,
-        title: t.title,
-        artist: t.artist,
-        album: t.album,
-        duration: t.duration == Duration.zero ? null : t.duration,
-        isRemote: true,
-        formatOverride: '',
-        source: t.platformLabel,
-        genre: t.tags.isEmpty ? null : t.tags.first,
-        quality: quality ?? t.quality,
-      ),
-    );
+  OnlineTrack original,
+) async {
+  if (original.extra.isNotEmpty) return original;
+  final Future<OnlineTrack>? running = _matchingInFlight[original.id];
+  if (running != null) return running;
+  final Future<OnlineTrack> future = _prepareOnlineTrackUncached(ref, original);
+  _matchingInFlight[original.id] = future;
+  try {
+    return await future;
+  } finally {
+    if (identical(_matchingInFlight[original.id], future)) {
+      _matchingInFlight.remove(original.id);
+    }
   }
-  if (resolved.isEmpty) return;
-  await ref
-      .read(playerControllerProvider.notifier)
-      .enqueueTracks(resolved, httpHeaders: _kUaHeaders);
 }
+
+Future<OnlineTrack> _prepareOnlineTrackUncached(
+  WidgetRef ref,
+  OnlineTrack original,
+) async {
+  final OnlineTrack? matched = await HostSearch.instance.matchTrack(
+    Track(
+      id: original.id,
+      uri: '',
+      title: original.title,
+      artist: original.artist,
+      album: original.album,
+      duration: original.duration == Duration.zero ? null : original.duration,
+      isRemote: true,
+    ),
+    platforms: <String>[original.platform],
+  );
+  if (matched == null) return original;
+  await ref.read(onlineLibraryProvider.notifier).remember(<OnlineTrack>[
+    matched,
+  ]);
+  return matched;
+}
+
+Track _remoteTrack(OnlineTrack track, String url, {String? quality}) => Track(
+  id: track.id,
+  uri: url,
+  title: track.title,
+  artist: track.artist,
+  album: track.album,
+  duration: track.duration == Duration.zero ? null : track.duration,
+  isRemote: true,
+  formatOverride: '',
+  source: track.platformLabel,
+  genre: track.tags.isEmpty ? null : track.tags.first,
+  quality: quality ?? track.quality,
+);
+
+/// 歌单播放只保留一次曲目：优先按稳定 ID 去重，在线曲目再按标题/歌手/专辑
+/// 去重，避免同一首歌因平台返回重复 ID 或重复版本多次进入队列。
+List<Track> _dedupePoolTracks(List<Track> input) {
+  final Set<String> ids = <String>{};
+  final Set<String> onlineKeys = <String>{};
+  final List<Track> result = <Track>[];
+  for (final Track track in input) {
+    if (!ids.add(track.id)) continue;
+    if (track.isRemote) {
+      final String key = _poolText(
+        '${track.title}|${track.artist}|${track.album}',
+      );
+      if (!onlineKeys.add(key)) continue;
+    }
+    result.add(track);
+  }
+  return result;
+}
+
+String _poolText(String value) => value
+    .toLowerCase()
+    .replaceAll(RegExp(r'[\s\u3000]+'), '')
+    .replaceAll(RegExp(r'[\(（].*?[\)）]'), '')
+    .replaceAll(RegExp(r'[^\p{L}\p{N}]', unicode: true), '');
 
 /// 第一个启用的源（兼容旧 `dav:<路径>` 格式）。
 WebDavSource? _firstEnabledSource(WidgetRef ref) => ref

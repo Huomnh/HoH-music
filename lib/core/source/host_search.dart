@@ -102,6 +102,34 @@ class SearchOutcome {
   bool get isEmpty => tracks.isEmpty;
 }
 
+/// Public 芸音歌单的基本信息，用于歌单导入而不是播放地址解析。
+class NeteasePlaylistInfo {
+  const NeteasePlaylistInfo({
+    required this.id,
+    required this.name,
+    required this.tracks,
+  });
+
+  final String id;
+  final String name;
+  final List<OnlineTrack> tracks;
+}
+
+/// Public 鹅音歌单的基本信息。与芸音模型分开，避免不同平台字段结构混用。
+class QqPlaylistInfo {
+  const QqPlaylistInfo({
+    required this.id,
+    required this.name,
+    required this.tracks,
+    this.shareUrl = '',
+  });
+
+  final String id;
+  final String name;
+  final List<OnlineTrack> tracks;
+  final String shareUrl;
+}
+
 /// 宿主搜索 / 刮削服务（单例）。
 class HostSearch {
   HostSearch._();
@@ -833,6 +861,188 @@ class HostSearch {
     }
   }
 
+  /// 读取公开网易云歌单。只读取标题和曲目元数据，不读取播放 URL。
+  Future<NeteasePlaylistInfo?> neteasePlaylist(String playlistId) async {
+    final String id = playlistId.trim();
+    if (!RegExp(r'^\d+$').hasMatch(id)) return null;
+    try {
+      // The web page endpoint only returns a small preview. The v6 endpoint
+      // includes the complete trackIds list; full song objects are fetched in
+      // a second request below.
+      final Response<dynamic> response = await _get(
+        'https://music.163.com/api/v6/playlist/detail',
+        query: <String, dynamic>{'id': id},
+        referer: 'https://music.163.com/',
+      );
+      final Map<String, dynamic> body = _asMap(response.data);
+      final Map<String, dynamic> playlist = _asMap(
+        body['playlist'] ?? body['result'],
+      );
+      if (playlist.isEmpty) return null;
+      final List<OnlineTrack> tracks = <OnlineTrack>[];
+      final Set<String> seen = <String>{};
+      final Object? rawTracks = playlist['tracks'];
+      if (rawTracks is List) {
+        for (final Object? raw in rawTracks) {
+          final OnlineTrack track = _neteaseSongToTrack(_asMap(raw));
+          if (track.songId.isNotEmpty && seen.add(track.songId)) {
+            tracks.add(track);
+          }
+        }
+      }
+      final List<String> trackIds = <String>[];
+      final Object? rawIds = playlist['trackIds'];
+      if (rawIds is List) {
+        for (final Object? raw in rawIds) {
+          final String songId = raw is Map
+              ? raw['id']?.toString() ?? ''
+              : raw.toString();
+          if (RegExp(r'^\d+$').hasMatch(songId)) trackIds.add(songId);
+        }
+      }
+      final List<String> missingIds = trackIds
+          .where((String songId) => !seen.contains(songId))
+          .toList(growable: false);
+      for (int offset = 0; offset < missingIds.length; offset += 100) {
+        final List<String> batch = missingIds.skip(offset).take(100).toList();
+        final Response<dynamic> detail = await _get(
+          'https://music.163.com/api/song/detail',
+          query: <String, dynamic>{'ids': '[${batch.join(',')}]'},
+          referer: 'https://music.163.com/',
+        );
+        final Object? rawSongs = _asMap(detail.data)['songs'];
+        if (rawSongs is! List) continue;
+        for (final Object? raw in rawSongs) {
+          final OnlineTrack track = _neteaseSongToTrack(_asMap(raw));
+          if (track.songId.isNotEmpty && seen.add(track.songId)) {
+            tracks.add(track);
+          }
+        }
+      }
+      return NeteasePlaylistInfo(
+        id: id,
+        name: playlist['name']?.toString() ?? '网易云歌单',
+        tracks: tracks,
+      );
+    } catch (error) {
+      lastError = error.toString();
+      return null;
+    }
+  }
+
+  /// 读取公开鹅音歌单。只读取标题和曲目元数据，不读取播放 URL。
+  ///
+  /// 分享短链通常会先返回网页，再由页面指向真实的 `disstid`；调用方负责
+  /// 从链接中提取 ID。该接口返回完整 songlist，曲目顺序保持不变。
+  Future<QqPlaylistInfo?> qqPlaylist(String playlistId) async {
+    final String id = playlistId.trim();
+    if (!RegExp(r'^\d+$').hasMatch(id)) return null;
+    try {
+      final Response<dynamic> response = await _get(
+        'https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg',
+        query: <String, dynamic>{
+          'disstid': id,
+          'format': 'json',
+          'outCharset': 'utf8',
+          'type': 1,
+          'json': 1,
+          'utf8': 1,
+          'onlysong': 0,
+          'new_format': 1,
+        },
+        referer: 'https://y.qq.com/',
+      );
+      final Map<String, dynamic> body = _asMap(_stripJsonp(response.data));
+      final Map<String, dynamic> playlist = _asMap(
+        (body['cdlist'] is List && (body['cdlist'] as List).isNotEmpty)
+            ? (body['cdlist'] as List).first
+            : body['playlist'],
+      );
+      if (playlist.isEmpty) return null;
+      final List<OnlineTrack> tracks = parseQQPlaylist(playlist);
+      if (tracks.isEmpty) return null;
+      return QqPlaylistInfo(
+        id: id,
+        name: playlist['dissname']?.toString() ?? '鹅音歌单',
+        tracks: tracks,
+      );
+    } catch (error) {
+      lastError = _humanize(error);
+      return null;
+    }
+  }
+
+  /// 解析鹅音分享页/短链，再读取公开歌单详情。
+  ///
+  /// `c6.y.qq.com/base/fcgi-bin/u?...` 这类链接没有把歌单 ID 放在 query
+  /// 中，页面会在 HTML 的 canonical/og:url 中给出 `/playlist/<id>`。
+  Future<QqPlaylistInfo?> qqPlaylistFromUrl(String url) async {
+    final String input = _normalizeQqShareUrl(url);
+    final String? directId = extractQqPlaylistId(input);
+    if (directId != null) return qqPlaylist(directId);
+    try {
+      final Response<dynamic> response = await _get(
+        input,
+        referer: 'https://y.qq.com/',
+        responseType: ResponseType.plain,
+        headers: <String, String>{
+          'Accept': 'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'zh-CN,zh;q=0.9',
+        },
+      );
+      final String html = response.data?.toString() ?? '';
+      final String redirectText = <String>[
+        response.realUri.toString(),
+        for (final RedirectRecord redirect in response.redirects)
+          redirect.location.toString(),
+      ].join('\n');
+      final String? id =
+          extractQqPlaylistId(redirectText) ?? extractQqPlaylistId(html);
+      return id == null ? null : await qqPlaylist(id);
+    } catch (error) {
+      lastError = _humanize(error);
+      return null;
+    }
+  }
+
+  /// 从鹅音网页、电脑端短分享页或页面元数据中提取歌单 ID。
+  ///
+  /// 电脑端分享的 `c6.y.qq.com/base/fcgi-bin/u?...` 参数是短 token，
+  /// 不能直接当成歌单 ID；短页通常会把真实地址放到 og:url、canonical
+  /// 或脚本中的 `/playlist/<id>`。保留为纯函数便于单测和后续适配页面变更。
+  @visibleForTesting
+  static String? extractQqPlaylistId(String value) {
+    String text = _normalizeQqShareUrl(value);
+    // 短链页面经常把真实链接再包一层 query/JSON；最多解码三次，
+    // 避免对普通中文歌名做无意义的重复转换。
+    for (int index = 0; index < 3; index++) {
+      final String decoded = Uri.decodeFull(text);
+      if (decoded == text) break;
+      text = _normalizeQqShareUrl(decoded);
+    }
+    final List<RegExp> patterns = <RegExp>[
+      RegExp(r'playlist(?:[/\\]){1,2}(\d+)', caseSensitive: false),
+      RegExp(r'playlist%2f(\d+)', caseSensitive: false),
+      RegExp(r'[?&](?:id|disstid)=(\d+)', caseSensitive: false),
+      RegExp(r'"(?:playlistId|dissid)"\s*:\s*"?(\d+)', caseSensitive: false),
+    ];
+    for (final RegExp pattern in patterns) {
+      final RegExpMatch? match = pattern.firstMatch(text);
+      final String? id = match?.group(1);
+      if (id != null && RegExp(r'^\d+$').hasMatch(id)) return id;
+    }
+    return null;
+  }
+
+  static String _normalizeQqShareUrl(String value) => value
+      .trim()
+      .replaceAll(r'\&', '&')
+      .replaceAll(r'\_', '_')
+      .replaceAll('&amp;', '&')
+      .replaceAll(r'\/', '/')
+      .replaceAll(r'\u002F', '/')
+      .replaceAll('\\u0026', '&');
+
   /// 兼容旧名（`wy` 专用路径）。
   Future<String?> neteaseCoverUrl(String songId) => _neteaseCoverUrl(songId);
 
@@ -1162,6 +1372,57 @@ class HostSearch {
             seconds: int.tryParse(item['interval']?.toString() ?? '') ?? 0,
           ),
           coverUrl: qqCoverUrl(albumMid) ?? '',
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// 解析 QQ 歌单详情里的 `songlist`，兼容接口返回的数字 ID、MID 和旧字段。
+  @visibleForTesting
+  static List<OnlineTrack> parseQQPlaylist(Map<String, dynamic> playlist) {
+    final Object? list = playlist['songlist'];
+    if (list is! List) return const <OnlineTrack>[];
+    final List<OnlineTrack> out = <OnlineTrack>[];
+    final Set<String> seen = <String>{};
+    for (final Object? raw in list) {
+      final Map<String, dynamic> item = _asMap(raw);
+      final String mid =
+          item['mid']?.toString() ?? item['songmid']?.toString() ?? '';
+      final String numericId = item['id']?.toString() ?? '';
+      final String songId = mid.isNotEmpty ? mid : numericId;
+      if (songId.isEmpty || !seen.add(songId)) continue;
+      final List<String> singers = <String>[];
+      final Object? singerRaw = item['singer'];
+      if (singerRaw is List) {
+        for (final Object? singer in singerRaw) {
+          final String name = _asMap(singer)['name']?.toString() ?? '';
+          if (name.isNotEmpty) singers.add(name);
+        }
+      }
+      final Map<String, dynamic> album = _asMap(item['album']);
+      final String albumMid =
+          album['mid']?.toString() ?? album['pmid']?.toString() ?? '';
+      final Map<String, dynamic> file = _asMap(item['file']);
+      out.add(
+        OnlineTrack(
+          platform: 'tx',
+          songId: songId,
+          title: item['name']?.toString() ?? item['title']?.toString() ?? '',
+          artist: singers.join(' / '),
+          album: album['name']?.toString() ?? album['title']?.toString() ?? '',
+          albumId: albumMid,
+          duration: Duration(
+            seconds: int.tryParse(item['interval']?.toString() ?? '') ?? 0,
+          ),
+          coverUrl: qqCoverUrl(albumMid) ?? '',
+          extra: <String, dynamic>{
+            'songId': numericId,
+            'songmid': mid,
+            'media_mid': file['media_mid']?.toString() ?? '',
+            'albumId': albumMid,
+            'album_mid': albumMid,
+          },
         ),
       );
     }

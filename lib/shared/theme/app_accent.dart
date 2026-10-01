@@ -70,6 +70,12 @@ class AppAccent {
         tertiary: Color(0xFFE85D75),
         source: '暖霞流光',
       ),
+      BackgroundKind.animeCandy => const AppAccent(
+        primary: Color(0xFFE76AAE),
+        secondary: Color(0xFF62C9D8),
+        tertiary: Color(0xFFFFB84D),
+        source: '彩虹甜心',
+      ),
       // 自定义图片：先用液态流光色，等提取结果回来再替换
       BackgroundKind.custom => const AppAccent(
         primary: Color(0xFF7C8CFF),

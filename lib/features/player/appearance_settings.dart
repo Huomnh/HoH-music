@@ -36,6 +36,8 @@ import '../../shared/widgets/widget_kit/glass_panel.dart';
 import 'cover_style.dart';
 import 'compact_player_settings.dart';
 import 'lyrics/lyrics_style.dart';
+import 'liquid_glass_plus_preview.dart';
+import 'player_layout_settings.dart';
 
 /// 外观设置页（内嵌在播放页右侧主区）。
 class AppearanceSettingsView extends ConsumerWidget {
@@ -127,6 +129,10 @@ class AppearanceSettingsView extends ConsumerWidget {
                       ),
                       const SizedBox(height: 18),
 
+                      _GroupLabel('播放页布局', color: accent.primary),
+                      const PlayerControlLayoutSection(),
+                      const SizedBox(height: 18),
+
                       _CompactCornerSection(accent: accent),
                       const SizedBox(height: 18),
 
@@ -138,40 +144,105 @@ class AppearanceSettingsView extends ConsumerWidget {
                       const CoverStageSection(),
                       const SizedBox(height: 18),
 
-                      _GroupLabel('模糊与通透', color: accent.primary),
+                      _GroupLabel('Liquid Glass Plus', color: accent.primary),
                       _SliderRow(
                         accent: accent,
-                        label: '模糊强度',
-                        hint: config.blurSigma <= 0
-                            ? '已关闭'
-                            : '${config.blurSigma.toStringAsFixed(0)} px',
-                        value: config.blurSigma.clamp(0, 40),
-                        max: 40,
-                        onChanged: controller.setBlurSigma,
-                      ),
-                      _SliderRow(
-                        accent: accent,
-                        label: '玻璃通透度',
+                        label: '玻璃染色强度',
                         hint: '${(config.tintOpacity * 100).round()}%',
-                        value: config.tintOpacity.clamp(0.0, 1.0),
-                        max: 1.0,
+                        value: config.tintOpacity,
+                        max: 1,
                         onChanged: controller.setTintOpacity,
                       ),
                       _SliderRow(
                         accent: accent,
-                        label: '玻璃饱和度',
-                        hint: '${(config.glassSaturation * 100).round()}%',
-                        value: config.glassSaturation,
-                        max: 1,
-                        onChanged: controller.setGlassSaturation,
+                        label: '玻璃厚度',
+                        hint: '${config.glassThickness.toStringAsFixed(1)} px',
+                        value: config.glassThickness,
+                        max: 30,
+                        onChanged: controller.setGlassThickness,
                       ),
                       _SliderRow(
                         accent: accent,
-                        label: '玻璃明暗',
-                        hint: config.glassTone < 0.5 ? '偏白' : '偏黑',
-                        value: config.glassTone,
+                        label: '磨砂强度',
+                        hint: config.frostIntensity.toStringAsFixed(1),
+                        value: config.frostIntensity,
+                        max: 20,
+                        onChanged: controller.setFrostIntensity,
+                      ),
+                      _SliderRow(
+                        accent: accent,
+                        label: '折射率',
+                        hint: config.refractiveIndex.toStringAsFixed(3),
+                        value: config.refractiveIndex,
+                        min: 1,
+                        max: 1.5,
+                        onChanged: controller.setRefractiveIndex,
+                      ),
+                      _SliderRow(
+                        accent: accent,
+                        label: '色散强度',
+                        hint: config.chromaticAberration.toStringAsFixed(3),
+                        value: config.chromaticAberration,
+                        max: 0.03,
+                        onChanged: controller.setChromaticAberration,
+                      ),
+                      _SliderRow(
+                        accent: accent,
+                        label: '光照角度',
+                        hint:
+                            '${(config.lightAngle * 180 / 3.1415926535).round()}°',
+                        value: config.lightAngle,
+                        max: 6.283,
+                        onChanged: controller.setLightAngle,
+                      ),
+                      _SliderRow(
+                        accent: accent,
+                        label: '光照强度',
+                        hint: config.lightIntensity.toStringAsFixed(2),
+                        value: config.lightIntensity,
+                        max: 2,
+                        onChanged: controller.setLightIntensity,
+                      ),
+                      _SliderRow(
+                        accent: accent,
+                        label: '环境光',
+                        hint: config.ambientStrength.toStringAsFixed(2),
+                        value: config.ambientStrength,
                         max: 1,
-                        onChanged: controller.setGlassTone,
+                        onChanged: controller.setAmbientStrength,
+                      ),
+                      _SliderRow(
+                        accent: accent,
+                        label: '背景饱和度倍率',
+                        hint: config.liquidSaturation.toStringAsFixed(2),
+                        value: config.liquidSaturation,
+                        min: 0.5,
+                        max: 2,
+                        onChanged: controller.setLiquidSaturation,
+                      ),
+                      _SliderRow(
+                        accent: accent,
+                        label: 'Skia 回退折射',
+                        hint: config.fakeGlassRefraction.toStringAsFixed(1),
+                        value: config.fakeGlassRefraction,
+                        max: 8,
+                        onChanged: controller.setFakeGlassRefraction,
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => showLiquidGlassPlusPreview(context),
+                        icon: const Icon(Icons.science_outlined, size: 16),
+                        label: const Text('试用 liquid_glass_plus 液态玻璃'),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text(
+                          '试用面板与主界面使用同一套插件参数。',
+                          style: TextStyle(
+                            color: AppColors.textTertiary,
+                            fontSize: 10.5,
+                          ),
+                        ),
                       ),
 
                       const SizedBox(height: 12),
@@ -336,6 +407,49 @@ class AppearanceSettingsView extends ConsumerWidget {
       }
       if (glass['glassTone'] is num) {
         await controller.setGlassTone((glass['glassTone'] as num).toDouble());
+      }
+      if (glass['glassThickness'] is num) {
+        await controller.setGlassThickness(
+          (glass['glassThickness'] as num).toDouble(),
+        );
+      }
+      if (glass['frostIntensity'] is num) {
+        await controller.setFrostIntensity(
+          (glass['frostIntensity'] as num).toDouble(),
+        );
+      }
+      if (glass['refractiveIndex'] is num) {
+        await controller.setRefractiveIndex(
+          (glass['refractiveIndex'] as num).toDouble(),
+        );
+      }
+      if (glass['chromaticAberration'] is num) {
+        await controller.setChromaticAberration(
+          (glass['chromaticAberration'] as num).toDouble(),
+        );
+      }
+      if (glass['lightAngle'] is num) {
+        await controller.setLightAngle((glass['lightAngle'] as num).toDouble());
+      }
+      if (glass['lightIntensity'] is num) {
+        await controller.setLightIntensity(
+          (glass['lightIntensity'] as num).toDouble(),
+        );
+      }
+      if (glass['ambientStrength'] is num) {
+        await controller.setAmbientStrength(
+          (glass['ambientStrength'] as num).toDouble(),
+        );
+      }
+      if (glass['liquidSaturation'] is num) {
+        await controller.setLiquidSaturation(
+          (glass['liquidSaturation'] as num).toDouble(),
+        );
+      }
+      if (glass['fakeGlassRefraction'] is num) {
+        await controller.setFakeGlassRefraction(
+          (glass['fakeGlassRefraction'] as num).toDouble(),
+        );
       }
       if (glass['glowStrength'] is num) {
         await controller.setGlowStrength(
@@ -772,6 +886,43 @@ class _SelectedBadge extends StatelessWidget {
 }
 
 /// 歌词显示设置：字号 / 行距 / 自动滚动。
+/// 播放页控制区布局选择。
+///
+/// 这是共享 Flutter 设置；侧栏/底部的实际过渡由 [PlayerPage] 用
+/// `AnimatedSize` 驱动，设置页本身只负责持久化当前选择。
+class PlayerControlLayoutSection extends ConsumerWidget {
+  const PlayerControlLayoutSection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppAccent accent = AppAccent.of(context);
+    final PlayerControlLayout layout =
+        ref.watch(playerControlLayoutProvider).value ??
+        PlayerControlLayout.sidebar;
+    final PlayerControlLayoutController controller = ref.read(
+      playerControlLayoutProvider.notifier,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _ChoiceRow<PlayerControlLayout>(
+          label: '控制区位置',
+          values: PlayerControlLayout.values,
+          current: layout,
+          labelOf: (PlayerControlLayout value) => value.label,
+          onChanged: controller.setLayout,
+          accent: accent,
+        ),
+        Text(
+          layout.description,
+          style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+        ),
+      ],
+    );
+  }
+}
+
 class LyricsStyleSection extends ConsumerWidget {
   const LyricsStyleSection({super.key});
 
@@ -788,12 +939,43 @@ class LyricsStyleSection extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         _ChoiceRow<LyricsLayoutMode>(
-          label: '播放页歌词效果',
+          label: '歌词视觉模式',
           values: LyricsLayoutMode.values,
           current: style.layout,
           labelOf: (LyricsLayoutMode value) => value.label,
           onChanged: controller.setLayout,
           accent: accent,
+        ),
+        const SizedBox(height: 8),
+        _ChoiceRow<LyricLiftStyle>(
+          label: '当前字抬升',
+          values: LyricLiftStyle.values,
+          current: style.liftStyle,
+          labelOf: (LyricLiftStyle value) => value.label,
+          onChanged: controller.setLiftStyle,
+          accent: accent,
+        ),
+        _ChoiceRow<LyricStaggerStyle>(
+          label: '歌词行切换',
+          values: LyricStaggerStyle.values,
+          current: style.staggerStyle,
+          labelOf: (LyricStaggerStyle value) => value.label,
+          onChanged: controller.setStaggerStyle,
+          accent: accent,
+        ),
+        _SwitchRow(
+          accent: accent,
+          label: '歌词模糊',
+          hint: '按歌词与当前行的距离柔和淡出',
+          value: style.enableBlur,
+          onChanged: controller.setEnableBlur,
+        ),
+        _SwitchRow(
+          accent: accent,
+          label: '逐字辉光',
+          hint: '仅在有逐字时间轴时显示当前字辉光',
+          value: style.enableGlow,
+          onChanged: controller.setEnableGlow,
         ),
         const SizedBox(height: 12),
         _SliderRow(
@@ -891,14 +1073,6 @@ class LyricsStyleSection extends ConsumerWidget {
           value: style.desktopOverlay,
           onChanged: controller.setDesktopOverlay,
         ),
-        if (style.desktopOverlay)
-          _SwitchRow(
-            accent: accent,
-            label: '桌面歌词玻璃框',
-            hint: '关闭后只显示歌词文字',
-            value: style.overlayFrame,
-            onChanged: controller.setOverlayFrame,
-          ),
         if (style.desktopOverlay)
           _SwitchRow(
             accent: accent,

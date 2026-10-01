@@ -32,6 +32,8 @@ enum BackgroundKind {
   /// 暖霞流光；保留 deepTide 标识以兼容旧设置和主题包。
   deepTide('暖霞流光', '暖橙珊瑚与金色光晕缓慢呼吸'),
 
+  animeCandy('彩虹甜心', '轻快彩虹、云朵和卡通小伙伴缓慢漂浮'),
+
   /// 自定义图片。
   custom('自定义图片', '从本地选一张图片');
 
@@ -60,6 +62,18 @@ Map<String, Object?> builtInBackgroundDefinition(BackgroundKind kind) {
       'renderer': 'sunset-ember',
       'speed': 0.58,
       'colors': <String>['0xFFFF8A5B', '0xFFFFC857', '0xFFE85D75'],
+    },
+    BackgroundKind.animeCandy => <String, Object?>{
+      'format': 'hoh-background',
+      'version': 1,
+      'renderer': 'anime-candy',
+      'speed': 1.15,
+      'colors': <String>[
+        '0xFFFFDDF1',
+        '0xFFDDF6FF',
+        '0xFFFFF1BF',
+        '0xFFE4D9FF',
+      ],
     },
     BackgroundKind.custom => <String, Object?>{},
   };
@@ -289,6 +303,12 @@ class BackgroundLayer extends StatelessWidget {
             selection.dynamicDefinition ??
             builtInBackgroundDefinition(BackgroundKind.deepTide),
       ),
+      BackgroundKind.animeCandy => LiquidBloomScene(
+        animated: animated,
+        definition:
+            selection.dynamicDefinition ??
+            builtInBackgroundDefinition(BackgroundKind.animeCandy),
+      ),
       BackgroundKind.custom => LiquidBloomScene(
         animated: animated,
         definition: selection.dynamicDefinition,
@@ -298,6 +318,8 @@ class BackgroundLayer extends StatelessWidget {
     // 统一压一层暗色。
     //
     // 背景轻压暗，保证玻璃面板的浅色文字对比度。
+    final bool lightScene =
+        selection.effectiveKind == BackgroundKind.animeCandy;
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
@@ -305,7 +327,9 @@ class BackgroundLayer extends StatelessWidget {
         IgnorePointer(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.12),
+              color: (lightScene ? Colors.white : Colors.black).withValues(
+                alpha: lightScene ? 0.28 : 0.12,
+              ),
             ),
           ),
         ),

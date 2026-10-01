@@ -44,7 +44,7 @@ class PlayerUiState {
     this.duration = Duration.zero,
     this.volume = 0.8,
     this.completed = false,
-    this.mode = PlaybackMode.sequential,
+    this.mode = PlaybackMode.repeatAll,
   });
 
   /// 当前队列。

@@ -4,7 +4,7 @@
 ///
 /// ```
 /// ┌──────────────────────────────────────────────────────────┐
-/// │ 标题栏（应用图标 + 名称 + 窗口按钮）                        │
+/// │ Windows 标题栏（系统窗口按钮）                        │
 /// ├───────────┬──────────────────────────────┬───────────────┤
 /// │ 侧边栏     │ 播放器主区                    │ 播放队列       │
 /// │ (玻璃)     │  封面 + 曲目信息 + 进度 + 控制 │ (玻璃，可收起) │
@@ -31,7 +31,6 @@ import '../../core/audio/player_engine.dart' show Track;
 import '../../core/audio/player_providers.dart';
 import '../../core/source/source_models.dart' show qualityLabel;
 import '../../platforms/windows/desktop_window.dart';
-import '../../shared/constants.dart';
 import '../../shared/theme/app_accent.dart';
 import '../../shared/theme/app_background.dart';
 import '../../shared/theme/app_colors.dart';
@@ -44,6 +43,8 @@ import '../source/online_search_view.dart';
 import '../source/source_manager_view.dart';
 import '../source/download_manager_view.dart';
 import '../library/playlists.dart';
+import '../library/playlist_transfer.dart';
+import '../library/pool_playback.dart';
 import 'appearance_settings.dart';
 import 'compact_player_settings.dart';
 import 'cover_stage.dart';
@@ -51,6 +52,7 @@ import 'lyrics/lyrics_scene.dart';
 import 'lyrics/lyrics_scene_registry.dart';
 import 'lyrics/lyrics_view.dart';
 import 'lyrics/lyrics_style.dart';
+import 'player_layout_settings.dart';
 import 'playback_settings.dart';
 import 'version_info_view.dart';
 
@@ -63,8 +65,9 @@ class PlayerPage extends ConsumerStatefulWidget {
 }
 
 class _PlayerPageState extends ConsumerState<PlayerPage> {
-  /// 固定窗口尺寸：与左侧控制台的实际内容高度匹配，不再随歌词或曲名变化。
-  static const Size _compactWindowSize = Size(340, 260);
+  /// 紧凑播放器固定尺寸：新增歌词/桌面歌词快捷按钮后，260 高度会让
+  /// 控制台底部溢出；284 保持紧凑比例，同时给底部控制和队列安全区留出空间。
+  static const Size _compactWindowSize = Size(360, 316);
 
   /// 队列抽屉是否展开。
   bool _queueOpen = false;
@@ -72,6 +75,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   /// 紧凑播放器模式：只保留左上角播放控制区。
   bool _compactMode = false;
   bool _compactPinned = true;
+  bool _compactTransitioning = false;
   Size _normalWindowSize = const Size(1280, 800);
 
   /// 右侧主区当前显示哪一页。
@@ -133,6 +137,16 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
   }
 
+  /// 从任意控制区回到主播放页，让歌词入口在紧凑模式下也有明确去向。
+  void _openLyricsPage() {
+    if (_view != _MainView.player) {
+      setState(() => _view = _MainView.player);
+    }
+    if (_compactMode) {
+      _toggleCompactMode();
+    }
+  }
+
   /// 切到某个曲库页面 / 歌单（0.0.27）。
   void _showView(_MainView view, {String playlistId = ''}) {
     if (_view == view && _playlistId == playlistId) return;
@@ -183,32 +197,49 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   }
 
   Future<void> _toggleCompactMode() async {
+    if (_compactTransitioning) return;
+    _compactTransitioning = true;
+    final bool entering = !_compactMode;
     if (!DesktopWindow.isSupported) {
-      setState(() => _compactMode = !_compactMode);
+      if (mounted) setState(() => _compactMode = entering);
+      _compactTransitioning = false;
       return;
     }
     try {
-      if (!_compactMode) {
+      if (entering) {
         _normalWindowSize = await windowManager.getSize();
-        _compactPinned = true;
-        await windowManager.setAlwaysOnTop(true);
-        await windowManager.setMinimumSize(_compactWindowSize);
-        await windowManager.setMaximumSize(_compactWindowSize);
-        await windowManager.setResizable(false);
+        // 先切换 Flutter 内容，让动画从用户点击时立即开始；窗口 API
+        // 随后并行准备约束，避免连续 IPC await 把切换卡在旧页面上。
+        if (mounted) {
+          setState(() {
+            _compactMode = true;
+            _compactPinned = true;
+          });
+        }
+        await Future.wait(<Future<void>>[
+          windowManager.setAlwaysOnTop(true),
+          windowManager.setMinimumSize(_compactWindowSize),
+          windowManager.setMaximumSize(_compactWindowSize),
+          windowManager.setResizable(false),
+        ]);
         await windowManager.setSize(_compactWindowSize);
         await _alignCompactWindow();
-        if (mounted) setState(() => _compactMode = true);
       } else {
-        await windowManager.setAlwaysOnTop(false);
-        await windowManager.setMinimumSize(const Size(960, 640));
-        await windowManager.setMaximumSize(const Size(10000, 10000));
-        await windowManager.setResizable(true);
+        // 退出时也先恢复主内容，避免等待窗口还原期间出现“点了没反应”。
+        if (mounted) setState(() => _compactMode = false);
+        await Future.wait(<Future<void>>[
+          windowManager.setAlwaysOnTop(false),
+          windowManager.setMinimumSize(const Size(960, 640)),
+          windowManager.setMaximumSize(const Size(10000, 10000)),
+          windowManager.setResizable(true),
+        ]);
         await windowManager.setSize(_normalWindowSize);
         await windowManager.center();
-        if (mounted) setState(() => _compactMode = false);
       }
     } catch (_) {
-      if (mounted) setState(() => _compactMode = !_compactMode);
+      if (mounted) setState(() => _compactMode = !entering);
+    } finally {
+      _compactTransitioning = false;
     }
   }
 
@@ -238,7 +269,24 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   @override
   Widget build(BuildContext context) {
     final BlurConfig config = BlurConfigScope.of(context);
-    final bool settingsOpen = _view != _MainView.player;
+    final PlayerControlLayout controlLayout =
+        ref.watch(playerControlLayoutProvider).value ??
+        PlayerControlLayout.sidebar;
+    final bool bottomControls = controlLayout == PlayerControlLayout.bottom;
+
+    ref.listen<PlayerUiState>(playerControllerProvider, (
+      PlayerUiState? previous,
+      PlayerUiState next,
+    ) {
+      if (!next.completed) return;
+      final PendingPlaylist? current = ref.read(pendingPlaylistProvider);
+      if (current == null) return;
+      final int nextIndex = current.activeIndex + 1;
+      if (nextIndex >= current.tracks.length) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) playPendingPlaylistTrack(ref, current.tracks, nextIndex);
+      });
+    });
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -248,13 +296,42 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
           // 背景与歌词/鼠标交互隔离：只有切换背景（或曲目带来的主题色）才重绘底图。
           const Positioned.fill(child: RepaintBoundary(child: AppBackground())),
 
-          // ② 主界面 / 紧凑播放器。只做轻量淡入，避免大面积缩放。
+          // ② 主界面 / 紧凑播放器。窗口尺寸由平台层调整，内容切换用轻量
+          // 淡入、缩放和位移衔接，避免重型全屏动画造成额外 GPU 负担。
           AnimatedSwitcher(
-            duration: const Duration(milliseconds: 160),
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
-            transitionBuilder: (Widget child, Animation<double> animation) =>
-                FadeTransition(opacity: animation, child: child),
+            duration: const Duration(milliseconds: 420),
+            // 不让旧的整页 UI 与新紧凑 UI 同时绘制，避免窗口切换时双倍
+            // 玻璃/背景合成导致卡顿；新内容仍保留完整的淡入缩放动画。
+            reverseDuration: Duration.zero,
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            layoutBuilder:
+                (Widget? currentChild, List<Widget> previousChildren) => Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[...previousChildren, ?currentChild],
+                ),
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              final Animation<double> curved = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              );
+              return RepaintBoundary(
+                child: FadeTransition(
+                  opacity: curved,
+                  child: ScaleTransition(
+                    scale: Tween<double>(begin: 0.975, end: 1).animate(curved),
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, 0.018),
+                        end: Offset.zero,
+                      ).animate(curved),
+                      child: child,
+                    ),
+                  ),
+                ),
+              );
+            },
             child: _compactMode
                 ? _CompactPlayer(
                     key: const ValueKey<String>('compact-player'),
@@ -263,19 +340,11 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                     onToggleQueue: _toggleQueue,
                     onTogglePinned: _toggleCompactPinned,
                     onExit: _toggleCompactMode,
+                    onOpenPlayer: _openLyricsPage,
                   )
                 : Column(
                     key: const ValueKey<String>('full-player'),
                     children: <Widget>[
-                      _TitleBar(
-                        settingsOpen: settingsOpen,
-                        onToggleSettings: settingsOpen
-                            ? _showPlayer
-                            : _showSettings,
-                        onShowNavigation: () => _showCompactNavigation(context),
-                        compactMode: false,
-                        onToggleCompact: _toggleCompactMode,
-                      ),
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -293,6 +362,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                                     SizedBox(
                                       width: _sidebarWidthFor(viewportWidth),
                                       child: _Sidebar(
+                                        showConsole: !bottomControls,
                                         queueOpen: _queueOpen,
                                         onToggleQueue: _toggleQueue,
                                         view: _view,
@@ -302,45 +372,142 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                                             _showPlaybackSettings,
                                         onSelectVersionInfo: _showVersionInfo,
                                         onSelectPlayer: _showPlayer,
+                                        onToggleCompact: _toggleCompactMode,
                                         onSelectView: _showView,
                                       ),
                                     ),
                                     const SizedBox(width: 12),
                                   ],
                                   Expanded(
-                                    child: switch (_view) {
-                                      _MainView.player => _PlayerPanel(
-                                        onShowLyrics: _showLyricsDialog,
+                                    child: AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 360,
                                       ),
-                                      _MainView.glassSettings =>
-                                        const AppearanceSettingsView(),
-                                      _MainView.playbackSettings =>
-                                        const PlaybackSettingsView(),
-                                      _MainView.versionInfo =>
-                                        const VersionInfoView(),
-                                      // 曲库页面（0.0.27）
-                                      _MainView.allSongs =>
-                                        const AllSongsView(),
-                                      _MainView.albums => const AlbumsView(),
-                                      _MainView.artists => const ArtistsView(),
-                                      _MainView.favorites =>
-                                        const FavoritesView(),
-                                      _MainView.playlist => PlaylistView(
-                                        playlistId: _playlistId,
+                                      // 旧页面立即退出树，避免快速连续点击时旧标题仍参与
+                                      // 命中；新页面保留完整的淡入/横移动画。
+                                      reverseDuration: Duration.zero,
+                                      switchInCurve: Curves.easeOutCubic,
+                                      switchOutCurve: Curves.easeInCubic,
+                                      layoutBuilder:
+                                          (
+                                            Widget? currentChild,
+                                            List<Widget> previousChildren,
+                                          ) => Stack(
+                                            fit: StackFit.expand,
+                                            children: <Widget>[
+                                              ...previousChildren,
+                                              ?currentChild,
+                                            ],
+                                          ),
+                                      transitionBuilder:
+                                          (
+                                            Widget child,
+                                            Animation<double> animation,
+                                          ) {
+                                            final Animation<double> curved =
+                                                CurvedAnimation(
+                                                  parent: animation,
+                                                  curve: Curves.easeOutCubic,
+                                                  reverseCurve:
+                                                      Curves.easeInCubic,
+                                                );
+                                            return FadeTransition(
+                                              opacity: curved,
+                                              child: SlideTransition(
+                                                position: Tween<Offset>(
+                                                  begin: const Offset(0.025, 0),
+                                                  end: Offset.zero,
+                                                ).animate(curved),
+                                                child: child,
+                                              ),
+                                            );
+                                          },
+                                      child: KeyedSubtree(
+                                        key: ValueKey<String>(
+                                          'main-view-${_view.name}',
+                                        ),
+                                        child: switch (_view) {
+                                          _MainView.player => _PlayerPanel(
+                                            onShowLyrics: _showLyricsDialog,
+                                          ),
+                                          _MainView.glassSettings =>
+                                            const AppearanceSettingsView(),
+                                          _MainView.playbackSettings =>
+                                            const PlaybackSettingsView(),
+                                          _MainView.versionInfo =>
+                                            const VersionInfoView(),
+                                          // 曲库页面（0.0.27）
+                                          _MainView.allSongs =>
+                                            const AllSongsView(),
+                                          _MainView.albums =>
+                                            const AlbumsView(),
+                                          _MainView.artists =>
+                                            const ArtistsView(),
+                                          _MainView.favorites =>
+                                            const FavoritesView(),
+                                          _MainView.playlist => PlaylistView(
+                                            playlistId: _playlistId,
+                                          ),
+                                          _MainView.webdav =>
+                                            const WebDavView(),
+                                          _MainView.onlineSearch =>
+                                            const OnlineSearchView(),
+                                          _MainView.sourceManager =>
+                                            const SourceManagerView(),
+                                          _MainView.downloads =>
+                                            const DownloadManagerView(),
+                                        },
                                       ),
-                                      _MainView.webdav => const WebDavView(),
-                                      _MainView.onlineSearch =>
-                                        const OnlineSearchView(),
-                                      _MainView.sourceManager =>
-                                        const SourceManagerView(),
-                                      _MainView.downloads =>
-                                        const DownloadManagerView(),
-                                    },
+                                    ),
                                   ),
                                 ],
                               );
                             },
                           ),
+                        ),
+                      ),
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 420),
+                        curve: Curves.easeInOutCubic,
+                        alignment: Alignment.bottomCenter,
+                        clipBehavior: Clip.hardEdge,
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 280),
+                          reverseDuration: const Duration(milliseconds: 220),
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          transitionBuilder:
+                              (Widget child, Animation<double> animation) =>
+                                  FadeTransition(
+                                    opacity: animation,
+                                    child: SlideTransition(
+                                      position: Tween<Offset>(
+                                        begin: const Offset(0, 0.08),
+                                        end: Offset.zero,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                          child: bottomControls
+                              ? Padding(
+                                  key: const ValueKey<String>(
+                                    'bottom-control-layout',
+                                  ),
+                                  padding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    0,
+                                    12,
+                                    12,
+                                  ),
+                                  child: _BottomControlBar(
+                                    queueOpen: _queueOpen,
+                                    onToggleQueue: _toggleQueue,
+                                    onOpenPlayer: _showPlayer,
+                                  ),
+                                )
+                              : const SizedBox.shrink(
+                                  key: ValueKey<String>('no-bottom-controls'),
+                                ),
                         ),
                       ),
                     ],
@@ -354,6 +521,9 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             leftInset: MediaQuery.sizeOf(context).width >= 600
                 ? _sidebarWidthFor(MediaQuery.sizeOf(context).width) + 12
                 : 0,
+            // 底部布局和紧凑播放器都有固定控制区，队列只占用其上方空间，
+            // 避免抽屉最后几首歌盖住播放、进度和音量按钮。
+            bottomInset: _compactMode || bottomControls ? 124 : 0,
             blurSigma: config.blurSigma,
             blurEnabled: config.useBlur,
             showSweep: config.sweepEnabled && config.animationsEnabled,
@@ -362,59 +532,6 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
             onClose: _closeQueue,
           ),
         ],
-      ),
-    );
-  }
-
-  void _showCompactNavigation(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: GlassPanel(
-            borderRadius: BorderRadius.circular(18),
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                ListTile(
-                  leading: const Icon(Icons.play_circle_outline),
-                  title: const Text('正在播放'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _showPlayer();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.tune_rounded),
-                  title: const Text('外观设置'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _showSettings();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.library_music_outlined),
-                  title: const Text('播放设置'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _showPlaybackSettings();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.info_outline_rounded),
-                  title: const Text('版本说明'),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _showVersionInfo();
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -428,6 +545,7 @@ class _CompactPlayer extends StatelessWidget {
     required this.onToggleQueue,
     required this.onTogglePinned,
     required this.onExit,
+    required this.onOpenPlayer,
   });
 
   final bool queueOpen;
@@ -435,6 +553,7 @@ class _CompactPlayer extends StatelessWidget {
   final VoidCallback onToggleQueue;
   final VoidCallback onTogglePinned;
   final VoidCallback onExit;
+  final VoidCallback onOpenPlayer;
 
   @override
   Widget build(BuildContext context) {
@@ -491,7 +610,7 @@ class _CompactPlayer extends StatelessWidget {
               _Console(
                 queueOpen: queueOpen,
                 onToggleQueue: onToggleQueue,
-                onOpenPlayer: () {},
+                onOpenPlayer: onOpenPlayer,
               ),
             ],
           ),
@@ -547,290 +666,21 @@ enum _MainView {
 
 // ════════════════════════════════════════════════════════════════
 //  标题栏
-// ════════════════════════════════════════════════════════════════
+/// Windows 原生标题栏负责窗口移动、最小化、最大化和关闭；Flutter 页面不再重复绘制一层窗口框。
 
-/// 标题栏——对应设计稿的 `.titlebar`。
-///
-/// 原生窗口边框已由 `DesktopWindow.setup()` 去掉，所以这条栏就是窗口唯一的框：
-/// - 空白区域可拖动窗口、双击最大化 / 还原
-/// - 右侧按钮真正控制窗口（最小化 / 最大化还原 / 关闭）
-///
-/// 0.0.10：去掉了「高端 / 均衡 / 省电」切换器（性能档位改为桌面端自动判定），
-/// 齿轮改为**切换右侧主区显示设置页**，不再是弹窗。
-class _TitleBar extends StatelessWidget {
-  const _TitleBar({
-    required this.settingsOpen,
-    required this.onToggleSettings,
-    required this.onShowNavigation,
-    required this.compactMode,
-    required this.onToggleCompact,
-  });
-
-  /// 右侧主区当前是否显示设置页。
-  final bool settingsOpen;
-
-  /// 点击齿轮：在播放页与设置页之间切换。
-  final VoidCallback onToggleSettings;
-  final VoidCallback onShowNavigation;
-  final bool compactMode;
-  final VoidCallback onToggleCompact;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppAccent accent = AppAccent.of(context);
-    // ⚠️ 拖动区域必须显式铺满整条标题栏。
-    //
-    // 「只能拖左上角」的根因有两层：
-    // 1. 手写的 GestureDetector 用默认的 deferToChild —— 只有子组件**绘制到的
-    //    像素**才响应手势，标题栏中间那片空白根本没有命中区域；
-    // 2. 换成 DragToMoveArea 后仍不对：它是 StatelessWidget，尺寸只包裹自己的
-    //    child，而 Row 里的 Spacer 不产生命中区域，所以拖动范围依然只有
-    //    图标和文字那几小块。
-    //
-    // 现在用 Container 显式给出全宽，并给一个**透明但存在**的底色
-    // （color 非 null 才会参与命中测试），整条栏就都能拖了。
-    return DragToMoveArea(
-      child: Container(
-        height: 40,
-        // 透明但存在 —— 让整条区域可命中
-        color: Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(
-          children: <Widget>[
-            // 应用图标：三色渐变圆角方块（颜色跟随背景强调色）
-            Container(
-              width: 16,
-              height: 16,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(4),
-                gradient: LinearGradient(
-                  colors: <Color>[
-                    accent.secondary,
-                    accent.tertiary,
-                    accent.primary,
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              AppConstants.appName,
-              style: const TextStyle(
-                color: Color(0xD9FFFFFF),
-                fontSize: 12,
-                letterSpacing: 0.4,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            // 中间留白用 Expanded 而非 Spacer：Spacer 只是 SizedBox.shrink 的
-            // 包装，不产生可命中的绘制；Expanded 里的 SizedBox.expand 会撑满
-            // 这块空间，配合上面的透明 color 让中间区域也能拖动。
-            const Expanded(child: SizedBox.expand()),
-            if (MediaQuery.sizeOf(context).width < 600) ...<Widget>[
-              _TitleIconButton(
-                tooltip: '导航',
-                icon: Icons.menu_rounded,
-                onTap: onShowNavigation,
-              ),
-              const SizedBox(width: 6),
-            ],
-            _GlassSettingsButton(active: settingsOpen, onTap: onToggleSettings),
-            const SizedBox(width: 6),
-            Tooltip(
-              message: compactMode ? '退出紧凑模式' : '紧凑播放器',
-              child: IconButton(
-                iconSize: 17,
-                onPressed: onToggleCompact,
-                icon: Icon(
-                  compactMode
-                      ? Icons.open_in_full_rounded
-                      : Icons.picture_in_picture_alt_rounded,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const _WindowButtons(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TitleIconButton extends StatelessWidget {
-  const _TitleIconButton({
-    required this.tooltip,
-    required this.icon,
-    required this.onTap,
-  });
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    child: IconButton(
-      iconSize: 18,
-      tooltip: tooltip,
-      onPressed: onTap,
-      icon: Icon(icon),
-    ),
-  );
-}
-
-/// 外观设置入口。挂在标题栏上，作为侧边栏入口的快捷方式
-/// （窗口太窄时侧边栏会被隐藏，这里仍然能进设置）。
-class _GlassSettingsButton extends StatefulWidget {
-  const _GlassSettingsButton({required this.active, required this.onTap});
-
-  /// 设置页是否正显示。
-  final bool active;
-
-  /// 点击回调。
-  final VoidCallback onTap;
-
-  @override
-  State<_GlassSettingsButton> createState() => _GlassSettingsButtonState();
-}
-
-class _GlassSettingsButtonState extends State<_GlassSettingsButton> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool lit = widget.active || _hovered;
-
-    return Tooltip(
-      message: widget.active ? '返回播放页' : '外观设置',
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.white.withValues(alpha: lit ? 0.14 : 0.06),
-            ),
-            child: Icon(
-              Icons.tune_rounded,
-              size: 14,
-              color: lit ? Colors.white : const Color(0xB3FFFFFF),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 窗口按钮（最小化 / 最大化还原 / 关闭）。真正控制窗口。
-class _WindowButtons extends StatefulWidget {
-  const _WindowButtons();
-
-  @override
-  State<_WindowButtons> createState() => _WindowButtonsState();
-}
-
-class _WindowButtonsState extends State<_WindowButtons> {
-  int _hovered = -1;
-  bool _maximized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _syncMaximized();
-  }
-
-  Future<void> _syncMaximized() async {
-    if (!DesktopWindow.isSupported) return;
-    try {
-      final bool value = await windowManager.isMaximized();
-      if (mounted) setState(() => _maximized = value);
-    } catch (_) {
-      // 窗口未就绪时忽略
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // 图标随最大化状态切换：口 / 还原
-    final List<IconData> icons = <IconData>[
-      Icons.remove,
-      _maximized ? Icons.fullscreen_exit : Icons.crop_square,
-      Icons.close,
-    ];
-    const List<String> tooltips = <String>['最小化', '最大化 / 还原', '关闭'];
-
-    return Row(
-      children: List<Widget>.generate(icons.length, (int i) {
-        final bool isClose = i == 2;
-        final bool hovered = _hovered == i;
-        return Tooltip(
-          message: tooltips[i],
-          child: MouseRegion(
-            cursor: SystemMouseCursors.click,
-            onEnter: (_) => setState(() => _hovered = i),
-            onExit: (_) => setState(() => _hovered = -1),
-            child: GestureDetector(
-              onTap: () => _onTap(i),
-              child: Container(
-                width: 44,
-                height: 40,
-                alignment: Alignment.center,
-                color: hovered
-                    ? (isClose
-                          ? const Color(0xFFE81123)
-                          : const Color(0x1FFFFFFF))
-                    : Colors.transparent,
-                child: Icon(
-                  icons[i],
-                  size: i == 2 ? 15 : 13,
-                  color: hovered ? Colors.white : const Color(0xB3FFFFFF),
-                ),
-              ),
-            ),
-          ),
-        );
-      }),
-    );
-  }
-
-  Future<void> _onTap(int index) async {
-    if (!DesktopWindow.isSupported) return;
-    switch (index) {
-      case 0:
-        await windowManager.minimize();
-      case 1:
-        if (await windowManager.isMaximized()) {
-          await windowManager.unmaximize();
-        } else {
-          await windowManager.maximize();
-        }
-        await _syncMaximized();
-      case 2:
-        await windowManager.close();
-    }
-  }
-}
-
-// ════════════════════════════════════════════════════════════════
-//  侧边栏
 // ════════════════════════════════════════════════════════════════
 
 /// 侧边栏内容——对应设计稿的 `.sidebar`。
 ///
 /// 0.0.10：设置不再是弹窗，而是页面入口；
 /// 0.0.11 加「外观设置」，0.0.12 加「播放设置」（音乐库扫描记录 + 启动行为）；
-/// **0.0.21：控制台搬到侧边栏顶部**（原来的「打开文件夹 / 添加单曲」两个按钮撤掉，
-/// 它们现在只在「播放设置」里），右侧面板只负责歌曲信息与歌词。
+/// 控制台默认位于侧边栏顶部；播放页布局切换为“底部控制”时，
+/// 同一套控制逻辑会移到页面底部，右侧面板仍只负责歌曲信息与歌词。
 ///
-/// 这一栏现在是三段式：**控制台固定顶部 / 导航可滚动 / 设置入口固定底部**。
+/// 侧栏本身保持三段式：**控制台（可收起）/ 导航可滚动 / 设置入口固定底部**。
 class _Sidebar extends ConsumerWidget {
   const _Sidebar({
+    required this.showConsole,
     required this.queueOpen,
     required this.onToggleQueue,
     required this.view,
@@ -839,12 +689,16 @@ class _Sidebar extends ConsumerWidget {
     required this.onSelectPlaybackSettings,
     required this.onSelectVersionInfo,
     required this.onSelectPlayer,
+    required this.onToggleCompact,
     required this.onSelectView,
   });
 
   /// 侧栏宽度见 [_sidebarWidthFor]（随窗口宽度分档）。
   /// 这里留一个常量给"最小宽度"用，别再往写死的 220 上收。
   static const double minimumWidth = 236;
+
+  /// 是否把播放控制区放在侧栏顶部；底部布局会把同一套控制逻辑移到页面底部。
+  final bool showConsole;
 
   /// 队列抽屉是否展开。
   final bool queueOpen;
@@ -869,6 +723,9 @@ class _Sidebar extends ConsumerWidget {
 
   /// 切回播放页。
   final VoidCallback onSelectPlayer;
+
+  /// 打开固定尺寸的紧凑播放器。
+  final VoidCallback onToggleCompact;
 
   /// 切到某个曲库页面 / 歌单（0.0.27）。
   final void Function(_MainView view, {String playlistId}) onSelectView;
@@ -911,21 +768,35 @@ class _Sidebar extends ConsumerWidget {
       // 三块面板的高光相位错开，对应设计稿的 .p1/.p2/.p3
       initialSweepPhase: 0.25,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-      // 0.0.21：不再整栏一起滚。控制台固定在顶部、设置入口固定在底部，
+      // 不再整栏一起滚。控制台按播放页布局可收起、设置入口固定在底部，
       // 只有中间那串导航会在窗口太矮时滚动——否则控制台一进来就把
       // 「外观设置 / 播放设置」挤出屏幕，用户根本点不到。
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          // ── 控制台：黑胶 + 曲名 + 进度 + 控制按钮（固定）──────────
-          // 0.0.40：**点控制台就是进「正在播放」页**（用户要求把入口挪到这里）
-          _Console(
-            queueOpen: queueOpen,
-            onToggleQueue: onToggleQueue,
-            onOpenPlayer: onSelectPlayer,
+          // ── 控制台：黑胶 + 曲名 + 进度 + 控制按钮（可收起）──────────
+          // 底部布局通过 AnimatedSize 将这一段平滑收起，导航不会瞬间跳位。
+          AnimatedSize(
+            duration: const Duration(milliseconds: 420),
+            curve: Curves.easeInOutCubic,
+            alignment: Alignment.topCenter,
+            clipBehavior: Clip.hardEdge,
+            child: showConsole
+                ? Column(
+                    key: const ValueKey<String>('sidebar-control-layout'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      _Console(
+                        queueOpen: queueOpen,
+                        onToggleQueue: onToggleQueue,
+                        onOpenPlayer: onSelectPlayer,
+                      ),
+                      const SizedBox(height: 14),
+                      const Divider(color: AppColors.divider, height: 1),
+                    ],
+                  )
+                : const SizedBox(key: ValueKey<String>('no-sidebar-controls')),
           ),
-          const SizedBox(height: 14),
-          const Divider(color: AppColors.divider, height: 1),
 
           // ── 导航（可滚动）────────────────────────────────────────
           Expanded(
@@ -958,27 +829,33 @@ class _Sidebar extends ConsumerWidget {
                     // ── 歌单：真的读用户歌单（0.0.27）─────────────────
                     _NavSection(
                       '歌单',
-                      trailing: IconButton(
-                        tooltip: '新建歌单',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: () async {
-                          final String name =
-                              await _promptNewPlaylist(context) ?? '';
-                          if (name.trim().isEmpty) return;
-                          final Playlist created = await ref
-                              .read(playlistsProvider.notifier)
-                              .create(name);
-                          onSelectView(
-                            _MainView.playlist,
-                            playlistId: created.id,
-                          );
-                        },
-                        icon: const Icon(
-                          Icons.add_rounded,
-                          size: 15,
-                          color: Color(0xB3FFFFFF),
-                        ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          const PlaylistTransferButtons(),
+                          IconButton(
+                            tooltip: '新建歌单',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () async {
+                              final String name =
+                                  await _promptNewPlaylist(context) ?? '';
+                              if (name.trim().isEmpty) return;
+                              final Playlist created = await ref
+                                  .read(playlistsProvider.notifier)
+                                  .create(name);
+                              onSelectView(
+                                _MainView.playlist,
+                                playlistId: created.id,
+                              );
+                            },
+                            icon: const Icon(
+                              Icons.add_rounded,
+                              size: 15,
+                              color: Color(0xB3FFFFFF),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     for (final Playlist p
@@ -1037,6 +914,13 @@ class _Sidebar extends ConsumerWidget {
             active: view == _MainView.playbackSettings,
             onTap: onSelectPlaybackSettings,
           ),
+          _NavItem(
+            label: '紧凑播放器',
+            icon: Icons.picture_in_picture_alt_rounded,
+            active: false,
+            onTap: onToggleCompact,
+          ),
+
           _NavItem(
             label: '版本说明',
             icon: Icons.info_outline_rounded,
@@ -1141,6 +1025,40 @@ class _AccentDot extends StatelessWidget {
 ///      [◀]   [▶]   [▶]
 ///  [🔊 ───────────────] [播放队列]
 /// ```
+Future<void> _stepPendingPlaylist(
+  BuildContext context,
+  WidgetRef ref,
+  PlayerController controller,
+  int delta,
+) async {
+  final PendingPlaylist? pending = ref.read(pendingPlaylistProvider);
+  if (pending == null) {
+    if (delta < 0) {
+      await controller.previous();
+    } else {
+      await controller.next();
+    }
+    return;
+  }
+  int target = pending.activeIndex + delta;
+  if (target < 0 || target >= pending.tracks.length) {
+    if (pending.tracks.isEmpty ||
+        ref.read(playerControllerProvider).mode != PlaybackMode.repeatAll) {
+      return;
+    }
+    target = delta < 0 ? pending.tracks.length - 1 : 0;
+  }
+  final PoolPlayResult result = await playPendingPlaylistTrack(
+    ref,
+    pending.tracks,
+    target,
+  );
+  if (result.failed.isNotEmpty && context.mounted) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(result.failed.first)));
+  }
+}
+
 class _Console extends ConsumerWidget {
   const _Console({
     required this.queueOpen,
@@ -1291,6 +1209,8 @@ class _Console extends ConsumerWidget {
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      _LyricsActionButtons(onOpenLyrics: onOpenPlayer),
                     ],
                   ),
                 ),
@@ -1334,7 +1254,8 @@ class _Console extends ConsumerWidget {
                   iconSize: 17,
                   enabled: hasTrack,
                   tooltip: '上一首',
-                  onTap: controller.previous,
+                  onTap: () =>
+                      _stepPendingPlaylist(context, ref, controller, -1),
                 ),
                 const SizedBox(width: 12),
                 _PlayButton(
@@ -1351,7 +1272,8 @@ class _Console extends ConsumerWidget {
                   iconSize: 17,
                   enabled: hasTrack,
                   tooltip: '下一首',
-                  onTap: controller.next,
+                  onTap: () =>
+                      _stepPendingPlaylist(context, ref, controller, 1),
                 ),
                 const SizedBox(width: 6),
                 _RoundButton(
@@ -1382,6 +1304,266 @@ class _Console extends ConsumerWidget {
             const SizedBox(width: 8),
             _QueueButton(active: queueOpen, onTap: onToggleQueue),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+/// 页面底部控制区。
+///
+/// 与侧栏控制台共用同一套播放器状态、队列步进和进度逻辑；这里只改变
+/// 信息密度与排布，不复制另一套播放后端。宽屏采用“曲目信息 / 走带 / 音量”
+/// 三段式，窄屏自动变成两行，便于未来复用到移动端和 TV。
+class _BottomControlBar extends ConsumerWidget {
+  const _BottomControlBar({
+    required this.queueOpen,
+    required this.onToggleQueue,
+    required this.onOpenPlayer,
+  });
+
+  final bool queueOpen;
+  final VoidCallback onToggleQueue;
+  final VoidCallback onOpenPlayer;
+
+  static const double _vinylSize = 52;
+  static const double _transportSize = 38;
+  static const double _playSize = 50;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppAccent accent = AppAccent.of(context);
+    final PlayerUiState state = ref.watch(playerControllerProvider);
+    final Track? track = state.currentTrack;
+    final bool hasTrack = track != null;
+    final Duration position =
+        ref.watch(playbackPositionProvider).value ?? Duration.zero;
+    final Duration total = state.duration > Duration.zero
+        ? state.duration
+        : (track?.duration ?? Duration.zero);
+    final double progress = total.inMilliseconds > 0
+        ? (position.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
+        : 0.0;
+    final PlayerController controller = ref.read(
+      playerControllerProvider.notifier,
+    );
+
+    Widget transport() => FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          if (hasTrack) _ConsoleFavoriteButton(trackId: track.id),
+          const SizedBox(width: 6),
+          _RoundButton(
+            icon: Icons.skip_previous_rounded,
+            diameter: _transportSize,
+            iconSize: 17,
+            enabled: hasTrack,
+            tooltip: '上一首',
+            onTap: () => _stepPendingPlaylist(context, ref, controller, -1),
+          ),
+          const SizedBox(width: 10),
+          _PlayButton(
+            size: _playSize,
+            playing: state.playing,
+            buffering: state.buffering,
+            enabled: hasTrack,
+            onTap: controller.togglePlayPause,
+          ),
+          const SizedBox(width: 10),
+          _RoundButton(
+            icon: Icons.skip_next_rounded,
+            diameter: _transportSize,
+            iconSize: 17,
+            enabled: hasTrack,
+            tooltip: '下一首',
+            onTap: () => _stepPendingPlaylist(context, ref, controller, 1),
+          ),
+          const SizedBox(width: 6),
+          _RoundButton(
+            icon: _modeIcon(state.mode),
+            diameter: _sideButtonSize,
+            iconSize: 15,
+            active: state.mode != PlaybackMode.sequential,
+            tooltip: '播放模式：${state.mode.label}（点击切换）',
+            onTap: controller.cyclePlaybackMode,
+          ),
+        ],
+      ),
+    );
+
+    Widget summary() => GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onOpenPlayer,
+      child: Row(
+        children: <Widget>[
+          const VinylRecord(size: _vinylSize, labelRatio: 0.52),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  hasTrack ? track.title : '未在播放',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: hasTrack ? Colors.white : const Color(0x99FFFFFF),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  hasTrack ? track.artist : '先添加音乐开始播放',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xCFFFFFFF),
+                    fontSize: 11.5,
+                  ),
+                ),
+                if (hasTrack) ...<Widget>[
+                  const SizedBox(height: 3),
+                  Text(
+                    track.qualityLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: accent.primary, fontSize: 10),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    Widget progressBar() => _ProgressBar(
+      progress: progress,
+      position: position,
+      total: total,
+      enabled: hasTrack && total > Duration.zero,
+      onSeek: (double ratio) {
+        if (total > Duration.zero) controller.seek(total * ratio);
+      },
+    );
+
+    return GlassPanel(
+      borderRadius: BorderRadius.circular(18),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          if (constraints.maxWidth < 720) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(child: summary()),
+                    const SizedBox(width: 12),
+                    _LyricsActionButtons(onOpenLyrics: onOpenPlayer),
+                    const SizedBox(width: 8),
+                    _QueueButton(active: queueOpen, onTap: onToggleQueue),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                progressBar(),
+                const SizedBox(height: 7),
+                transport(),
+                const SizedBox(height: 5),
+                _VolumeControl(
+                  volume: state.volume,
+                  onChanged: controller.setVolume,
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: <Widget>[
+              SizedBox(width: 270, child: summary()),
+              const SizedBox(width: 24),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    progressBar(),
+                    const SizedBox(height: 7),
+                    transport(),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 24),
+              SizedBox(
+                width: 190,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    _VolumeControl(
+                      volume: state.volume,
+                      onChanged: controller.setVolume,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: <Widget>[
+                        _LyricsActionButtons(onOpenLyrics: onOpenPlayer),
+                        const SizedBox(width: 8),
+                        _QueueButton(active: queueOpen, onTap: onToggleQueue),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 播放控制区的歌词入口：用明确的歌词与桌面歌词图标降低首次使用门槛。
+///
+/// 两个按钮只操作共享 Flutter 状态：打开歌词页仍由当前控制区决定去向，
+/// 桌面歌词开关由 [LyricsStyleController] 持久化；Windows 浮层宿主会自行
+/// 响应这个偏好，其他平台可复用按钮和设置状态。
+class _LyricsActionButtons extends ConsumerWidget {
+  const _LyricsActionButtons({required this.onOpenLyrics});
+
+  final VoidCallback onOpenLyrics;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final LyricsStyle style =
+        ref.watch(lyricsStyleProvider).value ?? const LyricsStyle();
+    final LyricsStyleController controller = ref.read(
+      lyricsStyleProvider.notifier,
+    );
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        _RoundButton(
+          icon: Icons.lyrics_rounded,
+          diameter: _sideButtonSize,
+          iconSize: 15,
+          tooltip: '展开歌词页',
+          onTap: onOpenLyrics,
+        ),
+        const SizedBox(width: 6),
+        _RoundButton(
+          icon: style.desktopOverlay
+              ? Icons.desktop_windows_rounded
+              : Icons.desktop_access_disabled_rounded,
+          diameter: _sideButtonSize,
+          iconSize: 15,
+          active: style.desktopOverlay,
+          tooltip: style.desktopOverlay ? '关闭桌面歌词' : '打开桌面歌词',
+          onTap: () => controller.setDesktopOverlay(!style.desktopOverlay),
         ),
       ],
     );
@@ -1577,223 +1759,11 @@ class _PlayerPanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final LyricsStyle style =
         ref.watch(lyricsStyleProvider).value ?? const LyricsStyle();
-    switch (style.layout) {
-      case LyricsLayoutMode.flowline:
-        final LyricsSceneDefinition? definition = lyricsSceneDefinitionFor(
-          style.layout,
-        );
-        return definition?.builder(onShowLyrics: onShowLyrics) ??
-            LyricsScene(mode: style.layout, onShowLyrics: onShowLyrics);
-      case LyricsLayoutMode.scrollingList:
-        break;
-    }
-
-    final BlurConfig config = BlurConfigScope.of(context);
-    return GlassPanel(
-      borderRadius: BorderRadius.circular(16),
-      blurSigma: config.blurSigma,
-      blurEnabled: config.useBlur,
-      showSweepAt: config.sweepEnabled && config.animationsEnabled,
-      glowOpacity: config.glowStrength,
-      glowColor: config.glowColor,
-      tintOpacity: config.tintOpacity,
-      initialSweepPhase: 0.5,
-      padding: const EdgeInsets.fromLTRB(28, 24, 28, 24),
-      child: _PlayerBody(onShowLyrics: onShowLyrics),
+    final LyricsSceneDefinition? definition = lyricsSceneDefinitionFor(
+      style.layout,
     );
-  }
-}
-
-/// 封面 + 曲目信息 + 歌词。宽窗口左右排，窄窗口上下堆叠。
-class _PlayerBody extends StatelessWidget {
-  const _PlayerBody({required this.onShowLyrics});
-
-  final VoidCallback onShowLyrics;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool showLyrics = MediaQuery.sizeOf(context).width >= 800;
-        final bool wide = constraints.maxWidth > 760 && showLyrics;
-        // 封面随空间缩放，始终处于 180~320dp 的设计范围内。
-        final double coverSize = wide
-            ? (constraints.maxHeight * 0.40).clamp(176.0, 260.0)
-            : (constraints.maxWidth * 0.52).clamp(180.0, 320.0);
-
-        final Widget cover = CoverStage(size: coverSize);
-        const Widget info = _TrackInfo(centered: false);
-
-        if (!wide) {
-          // 窄窗口：封面在上、信息在下、歌词占剩余空间
-          return Column(
-            children: <Widget>[
-              cover,
-              const SizedBox(height: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    info,
-                    const SizedBox(height: 12),
-                    if (showLyrics)
-                      const Expanded(child: LyricsPanel())
-                    else
-                      _LyricsDialogButton(onTap: onShowLyrics),
-                  ],
-                ),
-              ),
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            SizedBox(
-              width: constraints.maxWidth * 0.39,
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: (constraints.maxWidth * 0.34).clamp(260.0, 380.0),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: <Widget>[
-                      cover,
-                      const SizedBox(height: 24),
-                      const _TrackInfo(centered: true),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 28),
-            Expanded(child: const LyricsPanel(centered: true)),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _LyricsDialogButton extends StatelessWidget {
-  const _LyricsDialogButton({required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppAccent accent = AppAccent.of(context);
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: const Icon(Icons.lyrics_rounded, size: 17),
-        label: const Text('打开歌词'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.white,
-          side: BorderSide(color: accent.primary.withValues(alpha: 0.55)),
-        ),
-      ),
-    );
-  }
-}
-
-/// 曲目信息（标题 / 艺术家 / 专辑 / 音质）。
-class _TrackInfo extends ConsumerWidget {
-  const _TrackInfo({this.centered = false});
-
-  final bool centered;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final AppAccent accent = AppAccent.of(context);
-    // 主题提取色先与深色玻璃底混合，再挑选 WCAG 对比度更高的文字色。
-    final Color accentSafeText = AppAccent.safeTextOn(
-      Color.alphaBlend(accent.primary.withValues(alpha: 0.22), Colors.black),
-    );
-    final PlayerUiState state = ref.watch(playerControllerProvider);
-    final Track? track = state.currentTrack;
-    final bool hasTrack = track != null;
-
-    return Column(
-      crossAxisAlignment: centered
-          ? CrossAxisAlignment.center
-          : CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Text(
-          hasTrack ? track.title : '未在播放',
-          textAlign: centered ? TextAlign.center : TextAlign.start,
-          maxLines: centered ? 1 : 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            // 主题色由封面/自定义图提取时先经对比度校验，避免亮色主题白字不可读。
-            color: hasTrack ? accentSafeText : const Color(0x99FFFFFF),
-            fontSize: centered ? 28 : 34,
-            fontWeight: FontWeight.w700,
-            letterSpacing: -0.6,
-            height: 1.12,
-            shadows: <Shadow>[
-              Shadow(
-                color: accent.secondary.withValues(alpha: 0.55),
-                blurRadius: 24,
-              ),
-              const Shadow(color: Color(0x99000000), blurRadius: 6),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          hasTrack ? track.artist : '用左上角的控制台播放，音乐从「播放设置」里添加',
-          textAlign: centered ? TextAlign.center : TextAlign.start,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: Color(0xD9FFFFFF),
-            fontSize: centered ? 14 : 16,
-            letterSpacing: 0.6,
-            shadows: <Shadow>[Shadow(color: Color(0xB3000000), blurRadius: 8)],
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          hasTrack ? track.album : '支持 MP3 / FLAC / WAV / M4A / OGG / OPUS',
-          textAlign: centered ? TextAlign.center : TextAlign.start,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: Color(0xB3FFFFFF),
-            fontSize: centered ? 12 : 13,
-            letterSpacing: 0.4,
-            shadows: <Shadow>[Shadow(color: Color(0x99000000), blurRadius: 6)],
-          ),
-        ),
-
-        // 音质 / 格式信息（0.0.16 新增）
-        if (hasTrack) ...<Widget>[
-          const SizedBox(height: 10),
-          _QualityBadge(
-            label: track.qualityLabel,
-            details:
-                '${_trackInfoLine(track)}\n${track.isRemote ? track.uri : track.id}',
-            accent: accent,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _trackInfoLine(track),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xB3FFFFFF),
-              fontSize: 11,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
-      ],
-    );
+    return definition?.builder(onShowLyrics: onShowLyrics) ??
+        LyricsScene(mode: style.layout, onShowLyrics: onShowLyrics);
   }
 }
 
@@ -1827,54 +1797,6 @@ String _trackInfoLine(Track track) {
     parts.add(qualityLabel(track.quality!));
   }
   return parts.join(' · ');
-}
-
-/// 音质徽标：本地文件显示解析到的技术信息；在线曲目只显示音质档位。
-class _QualityBadge extends StatelessWidget {
-  const _QualityBadge({
-    required this.label,
-    required this.accent,
-    this.details,
-  });
-
-  final String label;
-  final AppAccent accent;
-  final String? details;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: details ?? label,
-      waitDuration: const Duration(milliseconds: 300),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(7),
-          color: Colors.black.withValues(alpha: 0.28),
-          border: Border.all(color: accent.primary.withValues(alpha: 0.35)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(Icons.graphic_eq_rounded, size: 12, color: accent.primary),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.94),
-                fontSize: 11.5,
-                letterSpacing: 0.3,
-                fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
-                shadows: const <Shadow>[
-                  Shadow(color: Color(0x99000000), blurRadius: 4),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 /// 把时长格式化成 `m:ss`。
@@ -1951,11 +1873,17 @@ class _ProgressTrack extends StatefulWidget {
 
 class _ProgressTrackState extends State<_ProgressTrack> {
   bool _hovered = false;
+  bool _dragging = false;
+  double? _dragProgress;
 
   /// 把本地 x 坐标换算成 0~1 的播放比例。
   void _seekTo(double dx, double width) {
     if (!widget.enabled || width <= 0) return;
-    widget.onSeek((dx / width).clamp(0.0, 1.0));
+    final double value = (dx / width).clamp(0.0, 1.0);
+    setState(() {
+      _dragProgress = value;
+    });
+    widget.onSeek(value);
   }
 
   @override
@@ -1965,6 +1893,8 @@ class _ProgressTrackState extends State<_ProgressTrack> {
       builder: (BuildContext context, BoxConstraints constraints) {
         final double width = constraints.maxWidth;
 
+        final double targetProgress = _dragProgress ?? widget.progress;
+
         return MouseRegion(
           cursor: widget.enabled
               ? SystemMouseCursors.click
@@ -1972,9 +1902,25 @@ class _ProgressTrackState extends State<_ProgressTrack> {
           onEnter: (_) => setState(() => _hovered = true),
           onExit: (_) => setState(() => _hovered = false),
           child: GestureDetector(
-            onTapDown: (TapDownDetails d) => _seekTo(d.localPosition.dx, width),
+            onTapDown: (TapDownDetails d) {
+              _dragging = true;
+              _seekTo(d.localPosition.dx, width);
+            },
+            onTapUp: (_) {
+              _dragging = false;
+              setState(() => _dragProgress = null);
+            },
+            onTapCancel: () {
+              _dragging = false;
+              setState(() => _dragProgress = null);
+            },
+            onHorizontalDragStart: (_) => _dragging = true,
             onHorizontalDragUpdate: (DragUpdateDetails d) =>
                 _seekTo(d.localPosition.dx, width),
+            onHorizontalDragEnd: (_) {
+              _dragging = false;
+              setState(() => _dragProgress = null);
+            },
             child: SizedBox(
               // 0.0.22：点击/拖动热区从 14 收到 12，控制台整体更紧凑
               height: 12,
@@ -1989,10 +1935,16 @@ class _ProgressTrackState extends State<_ProgressTrack> {
                         color: Colors.white.withValues(alpha: 0.18),
                       ),
                     ),
-                    FractionallySizedBox(
-                      widthFactor: widget.progress,
+                    AnimatedPositioned(
+                      duration: _dragging
+                          ? Duration.zero
+                          : const Duration(milliseconds: 150),
+                      curve: Curves.easeOutCubic,
+                      left: 0,
+                      right: width * (1 - targetProgress),
+                      top: 4,
+                      height: 4,
                       child: Container(
-                        height: 4,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(999),
                           gradient: LinearGradient(
@@ -2004,40 +1956,39 @@ class _ProgressTrackState extends State<_ProgressTrack> {
                           ),
                           boxShadow: <BoxShadow>[
                             BoxShadow(
-                              color: accent.primary.withValues(alpha: 0.6),
-                              blurRadius: 12,
+                              color: accent.primary.withValues(alpha: 0.42),
+                              blurRadius: 7,
                             ),
                           ],
                         ),
                       ),
                     ),
-                    Positioned.fill(
-                      child: FractionallySizedBox(
-                        widthFactor: widget.progress,
-                        alignment: Alignment.centerLeft,
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: AnimatedOpacity(
-                            duration: const Duration(milliseconds: 180),
-                            opacity: _hovered ? 1 : 0,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 140),
-                              width: _hovered ? 16 : 10,
-                              height: _hovered ? 16 : 10,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white,
-                                boxShadow: <BoxShadow>[
-                                  BoxShadow(
-                                    color: Color(0xE6FFFFFF),
-                                    blurRadius: 12,
-                                  ),
-                                  BoxShadow(
-                                    color: Color(0xB300E5FF),
-                                    blurRadius: 24,
-                                  ),
-                                ],
-                              ),
+                    AnimatedPositioned(
+                      duration: _dragging
+                          ? Duration.zero
+                          : const Duration(milliseconds: 150),
+                      curve: Curves.easeOutCubic,
+                      left: (width - 16) * targetProgress,
+                      top: 0,
+                      width: 16,
+                      height: 12,
+                      child: Center(
+                        child: AnimatedOpacity(
+                          duration: const Duration(milliseconds: 160),
+                          opacity: _hovered || _dragging ? 1 : 0,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 140),
+                            width: _hovered || _dragging ? 14 : 10,
+                            height: _hovered || _dragging ? 14 : 10,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white,
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: accent.primary.withValues(alpha: 0.58),
+                                  blurRadius: 9,
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -2391,6 +2342,7 @@ class _QueueDrawer extends StatelessWidget {
   const _QueueDrawer({
     required this.open,
     required this.leftInset,
+    required this.bottomInset,
     required this.blurSigma,
     required this.blurEnabled,
     required this.showSweep,
@@ -2401,6 +2353,7 @@ class _QueueDrawer extends StatelessWidget {
 
   final bool open;
   final double leftInset;
+  final double bottomInset;
   final double blurSigma;
   final bool blurEnabled;
   final bool showSweep;
@@ -2417,7 +2370,7 @@ class _QueueDrawer extends StatelessWidget {
           left: leftInset,
           top: 0,
           right: 0,
-          bottom: 0,
+          bottom: bottomInset,
           child: IgnorePointer(
             ignoring: !open,
             child: AnimatedOpacity(
@@ -2436,7 +2389,7 @@ class _QueueDrawer extends StatelessWidget {
           duration: const Duration(milliseconds: 280),
           curve: Curves.easeOutCubic,
           top: 0,
-          bottom: 0,
+          bottom: bottomInset,
           right: open ? 0 : -_QueuePanel.width,
           width: _QueuePanel.width,
           child: Padding(
@@ -2480,8 +2433,8 @@ class _QueuePanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final PlayerUiState state = ref.watch(playerControllerProvider);
-    final List<Track> tracks = state.queue;
-
+    final PendingPlaylist? pending = ref.watch(pendingPlaylistProvider);
+    final List<Track> tracks = pending?.tracks ?? state.queue;
     return GlassPanel(
       borderRadius: BorderRadius.circular(16),
       blurSigma: blurSigma,
@@ -2548,10 +2501,24 @@ class _QueuePanel extends ConsumerWidget {
                         title: t.title,
                         artist: t.artist,
                         duration: _formatDuration(t.duration ?? Duration.zero),
-                        active: index == state.currentIndex,
-                        onTap: () => ref
-                            .read(playerControllerProvider.notifier)
-                            .playAt(index),
+                        // 待解析歌单是展示队列，底层播放器此时只载入当前
+                        // 单曲，不能再用底层 currentIndex（通常为 0）判断。
+                        active: pending != null
+                            ? index == pending.activeIndex
+                            : index == state.currentIndex,
+                        onTap: () async {
+                          if (pending != null) {
+                            await playPendingPlaylistTrack(
+                              ref,
+                              pending.tracks,
+                              index,
+                            );
+                          } else {
+                            await ref
+                                .read(playerControllerProvider.notifier)
+                                .playAt(index);
+                          }
+                        },
                         onRemove: () => ref
                             .read(playerControllerProvider.notifier)
                             .removeQueueAt(index),

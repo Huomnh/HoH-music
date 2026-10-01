@@ -138,6 +138,27 @@ class PlaylistsController extends AsyncNotifier<List<Playlist>> {
     return playlist;
   }
 
+  /// 创建一个导入歌单，并按文件中的顺序写入已匹配曲目。
+  Future<Playlist> createImported(String name, List<String> trackIds) async {
+    final String baseName = name.trim().isEmpty ? '导入歌单' : name.trim();
+    final Set<String> names = <String>{
+      for (final Playlist p in state.value ?? const <Playlist>[]) p.name,
+    };
+    String uniqueName = baseName;
+    int suffix = 2;
+    while (names.contains(uniqueName)) {
+      uniqueName = '$baseName（导入 $suffix）';
+      suffix++;
+    }
+    final Playlist playlist = Playlist(
+      id: 'pl_${DateTime.now().microsecondsSinceEpoch}',
+      name: uniqueName,
+      trackIds: List<String>.unmodifiable(trackIds),
+    );
+    await _commit(<Playlist>[...(state.value ?? const <Playlist>[]), playlist]);
+    return playlist;
+  }
+
   /// 删除歌单（「我的喜欢」不给删）。
   Future<void> remove(String id) async {
     if (id == favoritesId) return;

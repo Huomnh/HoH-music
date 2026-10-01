@@ -45,7 +45,7 @@ enum PlaybackMode {
 @immutable
 class PlaybackPrefs {
   /// 创建偏好。
-  const PlaybackPrefs({this.volume = 0.8, this.mode = PlaybackMode.sequential});
+  const PlaybackPrefs({this.volume = 0.8, this.mode = PlaybackMode.repeatAll});
 
   /// 音量（0~1）。
   final double volume;
@@ -66,7 +66,7 @@ class PlaybackPrefs {
       if (modeName != null) {
         mode = PlaybackMode.values.firstWhere(
           (PlaybackMode m) => m.name == modeName,
-          orElse: () => PlaybackMode.sequential,
+          orElse: () => PlaybackMode.repeatAll,
         );
       } else if (prefs.getBool('playback.shuffle') ?? false) {
         mode = PlaybackMode.shuffle;
@@ -74,7 +74,7 @@ class PlaybackPrefs {
         mode = switch (prefs.getString('playback.replay')) {
           'all' => PlaybackMode.repeatAll,
           'one' => PlaybackMode.repeatOne,
-          _ => PlaybackMode.sequential,
+          _ => PlaybackMode.repeatAll,
         };
       }
 

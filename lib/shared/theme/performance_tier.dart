@@ -56,6 +56,15 @@ class BlurConfig {
     this.glassColor = Colors.white,
     this.glassSaturation = 0.08,
     this.glassTone = 0.08,
+    this.glassThickness = 10,
+    this.frostIntensity = 4,
+    this.refractiveIndex = 1.12,
+    this.chromaticAberration = 0.003,
+    this.lightAngle = 0.785,
+    this.lightIntensity = 0.55,
+    this.ambientStrength = 0.16,
+    this.liquidSaturation = 1.12,
+    this.fakeGlassRefraction = 1.5,
     this.glowColor,
   });
 
@@ -102,8 +111,35 @@ class BlurConfig {
   final double glassSaturation;
   final double glassTone;
 
+  /// `liquid_glass_plus` 的真实参数：玻璃厚度/折射位移。
+  final double glassThickness;
+
+  /// `liquid_glass_plus` 的磨砂强度。
+  final double frostIntensity;
+
+  /// `liquid_glass_plus` 的折射率。
+  final double refractiveIndex;
+
+  /// `liquid_glass_plus` 的色散/色边强度。
+  final double chromaticAberration;
+
+  /// 虚拟光源角度（弧度）。
+  final double lightAngle;
+
+  /// 虚拟光源强度。
+  final double lightIntensity;
+
+  /// 环境光强度。
+  final double ambientStrength;
+
+  /// 插件对背景颜色的饱和度倍率。
+  final double liquidSaturation;
+
+  /// Skia/Fake Glass 回退的边缘折射量。
+  final double fakeGlassRefraction;
+
   /// 是否需要构建 BackdropFilter。
-  bool get useBlur => blurSigma > 0;
+  bool get useBlur => frostIntensity > 0;
 
   /// 按档位返回推荐参数。
   ///
@@ -126,6 +162,15 @@ class BlurConfig {
         glassColor: Colors.white,
         glassSaturation: 0.01,
         glassTone: 1.0,
+        glassThickness: 14,
+        frostIntensity: 5,
+        refractiveIndex: 1.16,
+        chromaticAberration: 0.006,
+        lightAngle: 0.785,
+        lightIntensity: 0.8,
+        ambientStrength: 0.2,
+        liquidSaturation: 1.18,
+        fakeGlassRefraction: 2.0,
       ),
       PerformanceTier.balanced => const BlurConfig(
         tier: PerformanceTier.balanced,
@@ -139,6 +184,15 @@ class BlurConfig {
         glassColor: Colors.white,
         glassSaturation: 0.08,
         glassTone: 0.08,
+        glassThickness: 10,
+        frostIntensity: 4,
+        refractiveIndex: 1.12,
+        chromaticAberration: 0.003,
+        lightAngle: 0.785,
+        lightIntensity: 0.55,
+        ambientStrength: 0.16,
+        liquidSaturation: 1.12,
+        fakeGlassRefraction: 1.5,
       ),
       PerformanceTier.battery => const BlurConfig(
         tier: PerformanceTier.battery,
@@ -152,6 +206,15 @@ class BlurConfig {
         glassColor: Colors.white,
         glassSaturation: 0.08,
         glassTone: 0.08,
+        glassThickness: 0,
+        frostIntensity: 0,
+        refractiveIndex: 1.0,
+        chromaticAberration: 0,
+        lightAngle: 0.0,
+        lightIntensity: 0.0,
+        ambientStrength: 0.0,
+        liquidSaturation: 1.0,
+        fakeGlassRefraction: 0.0,
       ),
     };
   }
@@ -169,6 +232,15 @@ class BlurConfig {
     Color? glassColor,
     double? glassSaturation,
     double? glassTone,
+    double? glassThickness,
+    double? frostIntensity,
+    double? refractiveIndex,
+    double? chromaticAberration,
+    double? lightAngle,
+    double? lightIntensity,
+    double? ambientStrength,
+    double? liquidSaturation,
+    double? fakeGlassRefraction,
     Color? glowColor,
     bool clearGlowColor = false,
     bool clearGlassColor = false,
@@ -185,6 +257,15 @@ class BlurConfig {
       glassColor: glassColor ?? this.glassColor,
       glassSaturation: glassSaturation ?? this.glassSaturation,
       glassTone: glassTone ?? this.glassTone,
+      glassThickness: glassThickness ?? this.glassThickness,
+      frostIntensity: frostIntensity ?? this.frostIntensity,
+      refractiveIndex: refractiveIndex ?? this.refractiveIndex,
+      chromaticAberration: chromaticAberration ?? this.chromaticAberration,
+      lightAngle: lightAngle ?? this.lightAngle,
+      lightIntensity: lightIntensity ?? this.lightIntensity,
+      ambientStrength: ambientStrength ?? this.ambientStrength,
+      liquidSaturation: liquidSaturation ?? this.liquidSaturation,
+      fakeGlassRefraction: fakeGlassRefraction ?? this.fakeGlassRefraction,
       glowColor: clearGlowColor ? null : (glowColor ?? this.glowColor),
     );
   }
@@ -261,6 +342,15 @@ class GlassOverrides {
     this.glassColor,
     this.glassSaturation,
     this.glassTone,
+    this.glassThickness,
+    this.frostIntensity,
+    this.refractiveIndex,
+    this.chromaticAberration,
+    this.lightAngle,
+    this.lightIntensity,
+    this.ambientStrength,
+    this.liquidSaturation,
+    this.fakeGlassRefraction,
     this.animationsEnabled,
   });
 
@@ -283,6 +373,15 @@ class GlassOverrides {
   final Color? glassColor;
   final double? glassSaturation;
   final double? glassTone;
+  final double? glassThickness;
+  final double? frostIntensity;
+  final double? refractiveIndex;
+  final double? chromaticAberration;
+  final double? lightAngle;
+  final double? lightIntensity;
+  final double? ambientStrength;
+  final double? liquidSaturation;
+  final double? fakeGlassRefraction;
 
   /// 动画总开关覆盖。
   final bool? animationsEnabled;
@@ -298,6 +397,15 @@ class GlassOverrides {
       glassColor: glassColor,
       glassSaturation: glassSaturation,
       glassTone: glassTone,
+      glassThickness: glassThickness,
+      frostIntensity: frostIntensity,
+      refractiveIndex: refractiveIndex,
+      chromaticAberration: chromaticAberration,
+      lightAngle: lightAngle,
+      lightIntensity: lightIntensity,
+      ambientStrength: ambientStrength,
+      liquidSaturation: liquidSaturation,
+      fakeGlassRefraction: fakeGlassRefraction,
       animationsEnabled: animationsEnabled,
     );
   }
@@ -312,6 +420,15 @@ class GlassOverrides {
       glassColor == null &&
       glassSaturation == null &&
       glassTone == null &&
+      glassThickness == null &&
+      frostIntensity == null &&
+      refractiveIndex == null &&
+      chromaticAberration == null &&
+      lightAngle == null &&
+      lightIntensity == null &&
+      ambientStrength == null &&
+      liquidSaturation == null &&
+      fakeGlassRefraction == null &&
       animationsEnabled == null;
 
   /// 覆盖部分字段。
@@ -324,6 +441,15 @@ class GlassOverrides {
     Color? glassColor,
     double? glassSaturation,
     double? glassTone,
+    double? glassThickness,
+    double? frostIntensity,
+    double? refractiveIndex,
+    double? chromaticAberration,
+    double? lightAngle,
+    double? lightIntensity,
+    double? ambientStrength,
+    double? liquidSaturation,
+    double? fakeGlassRefraction,
     bool? animationsEnabled,
     bool clearGlowColor = false,
     bool clearGlassColor = false,
@@ -339,6 +465,15 @@ class GlassOverrides {
       glassColor: clearGlassColor ? null : (glassColor ?? this.glassColor),
       glassSaturation: glassSaturation ?? this.glassSaturation,
       glassTone: glassTone ?? this.glassTone,
+      glassThickness: glassThickness ?? this.glassThickness,
+      frostIntensity: frostIntensity ?? this.frostIntensity,
+      refractiveIndex: refractiveIndex ?? this.refractiveIndex,
+      chromaticAberration: chromaticAberration ?? this.chromaticAberration,
+      lightAngle: lightAngle ?? this.lightAngle,
+      lightIntensity: lightIntensity ?? this.lightIntensity,
+      ambientStrength: ambientStrength ?? this.ambientStrength,
+      liquidSaturation: liquidSaturation ?? this.liquidSaturation,
+      fakeGlassRefraction: fakeGlassRefraction ?? this.fakeGlassRefraction,
       animationsEnabled: animationsEnabled ?? this.animationsEnabled,
     );
   }
@@ -371,10 +506,18 @@ class GlassOverridesController extends Notifier<GlassOverrides> {
         'appearance.glassColor',
         'appearance.glassSaturation',
         'appearance.glassTone',
+        'appearance.glassThickness',
+        'appearance.frostIntensity',
+        'appearance.refractiveIndex',
+        'appearance.chromaticAberration',
+        'appearance.lightAngle',
+        'appearance.lightIntensity',
+        'appearance.ambientStrength',
+        'appearance.liquidSaturation',
+        'appearance.fakeGlassRefraction',
         'appearance.glowColor',
         'lyrics.autoScroll',
         'lyrics.desktopOverlay',
-        'lyrics.overlayFrame',
         'lyrics.overlayLocked',
       ]) {
         await prefs.remove(key);
@@ -389,6 +532,25 @@ class GlassOverridesController extends Notifier<GlassOverrides> {
       'appearance.glassSaturation',
     );
     final double? glassTone = prefs.getDouble('appearance.glassTone');
+    final double? glassThickness = prefs.getDouble('appearance.glassThickness');
+    final double? frostIntensity = prefs.getDouble('appearance.frostIntensity');
+    final double? refractiveIndex = prefs.getDouble(
+      'appearance.refractiveIndex',
+    );
+    final double? chromaticAberration = prefs.getDouble(
+      'appearance.chromaticAberration',
+    );
+    final double? lightAngle = prefs.getDouble('appearance.lightAngle');
+    final double? lightIntensity = prefs.getDouble('appearance.lightIntensity');
+    final double? ambientStrength = prefs.getDouble(
+      'appearance.ambientStrength',
+    );
+    final double? liquidSaturation = prefs.getDouble(
+      'appearance.liquidSaturation',
+    );
+    final double? fakeGlassRefraction = prefs.getDouble(
+      'appearance.fakeGlassRefraction',
+    );
     final bool? sweep = prefs.getBool('appearance.sweepEnabled');
     final bool? animations = prefs.getBool('appearance.animationsEnabled');
     final int? glassArgb = prefs.getInt('appearance.glassColor');
@@ -398,6 +560,15 @@ class GlassOverridesController extends Notifier<GlassOverrides> {
         glowStrength == null &&
         glassSaturation == null &&
         glassTone == null &&
+        glassThickness == null &&
+        frostIntensity == null &&
+        refractiveIndex == null &&
+        chromaticAberration == null &&
+        lightAngle == null &&
+        lightIntensity == null &&
+        ambientStrength == null &&
+        liquidSaturation == null &&
+        fakeGlassRefraction == null &&
         sweep == null &&
         animations == null &&
         glassArgb == null &&
@@ -410,6 +581,15 @@ class GlassOverridesController extends Notifier<GlassOverrides> {
       glowStrength: glowStrength,
       glassSaturation: glassSaturation,
       glassTone: glassTone,
+      glassThickness: glassThickness,
+      frostIntensity: frostIntensity,
+      refractiveIndex: refractiveIndex,
+      chromaticAberration: chromaticAberration,
+      lightAngle: lightAngle,
+      lightIntensity: lightIntensity,
+      ambientStrength: ambientStrength,
+      liquidSaturation: liquidSaturation,
+      fakeGlassRefraction: fakeGlassRefraction,
       sweepEnabled: sweep,
       animationsEnabled: animations,
       glassColor: glassArgb == null ? null : Color(glassArgb),
@@ -427,6 +607,39 @@ class GlassOverridesController extends Notifier<GlassOverrides> {
       state.glassSaturation ?? 0.08,
     );
     await prefs.setDouble('appearance.glassTone', state.glassTone ?? 0.08);
+    await prefs.setDouble(
+      'appearance.glassThickness',
+      state.glassThickness ?? 10,
+    );
+    await prefs.setDouble(
+      'appearance.frostIntensity',
+      state.frostIntensity ?? 4,
+    );
+    await prefs.setDouble(
+      'appearance.refractiveIndex',
+      state.refractiveIndex ?? 1.12,
+    );
+    await prefs.setDouble(
+      'appearance.chromaticAberration',
+      state.chromaticAberration ?? 0.003,
+    );
+    await prefs.setDouble('appearance.lightAngle', state.lightAngle ?? 0.785);
+    await prefs.setDouble(
+      'appearance.lightIntensity',
+      state.lightIntensity ?? 0.55,
+    );
+    await prefs.setDouble(
+      'appearance.ambientStrength',
+      state.ambientStrength ?? 0.16,
+    );
+    await prefs.setDouble(
+      'appearance.liquidSaturation',
+      state.liquidSaturation ?? 1.12,
+    );
+    await prefs.setDouble(
+      'appearance.fakeGlassRefraction',
+      state.fakeGlassRefraction ?? 1.5,
+    );
     await prefs.setBool('appearance.sweepEnabled', state.sweepEnabled ?? false);
     await prefs.setBool(
       'appearance.animationsEnabled',
@@ -446,7 +659,8 @@ class GlassOverridesController extends Notifier<GlassOverrides> {
 
   /// 设置模糊强度。传 0 等于关闭模糊。
   Future<void> setBlurSigma(double v) async {
-    state = state.copyWith(blurSigma: v.clamp(0, 40));
+    final double value = v.clamp(0, 20);
+    state = state.copyWith(blurSigma: v.clamp(0, 40), frostIntensity: value);
     await _save();
   }
 
@@ -494,6 +708,51 @@ class GlassOverridesController extends Notifier<GlassOverrides> {
     await _save();
   }
 
+  Future<void> setGlassThickness(double value) async {
+    state = state.copyWith(glassThickness: value.clamp(0.0, 30.0));
+    await _save();
+  }
+
+  Future<void> setFrostIntensity(double value) async {
+    state = state.copyWith(frostIntensity: value.clamp(0.0, 20.0));
+    await _save();
+  }
+
+  Future<void> setRefractiveIndex(double value) async {
+    state = state.copyWith(refractiveIndex: value.clamp(1.0, 1.5));
+    await _save();
+  }
+
+  Future<void> setChromaticAberration(double value) async {
+    state = state.copyWith(chromaticAberration: value.clamp(0.0, 0.03));
+    await _save();
+  }
+
+  Future<void> setLightAngle(double value) async {
+    state = state.copyWith(lightAngle: value.clamp(0.0, 6.283));
+    await _save();
+  }
+
+  Future<void> setLightIntensity(double value) async {
+    state = state.copyWith(lightIntensity: value.clamp(0.0, 2.0));
+    await _save();
+  }
+
+  Future<void> setAmbientStrength(double value) async {
+    state = state.copyWith(ambientStrength: value.clamp(0.0, 1.0));
+    await _save();
+  }
+
+  Future<void> setLiquidSaturation(double value) async {
+    state = state.copyWith(liquidSaturation: value.clamp(0.5, 2.0));
+    await _save();
+  }
+
+  Future<void> setFakeGlassRefraction(double value) async {
+    state = state.copyWith(fakeGlassRefraction: value.clamp(0.0, 8.0));
+    await _save();
+  }
+
   /// 开关全部动画。
   Future<void> setAnimations(bool v) async {
     state = state.copyWith(animationsEnabled: v);
@@ -513,6 +772,15 @@ class GlassOverridesController extends Notifier<GlassOverrides> {
       'appearance.glassColor',
       'appearance.glassSaturation',
       'appearance.glassTone',
+      'appearance.glassThickness',
+      'appearance.frostIntensity',
+      'appearance.refractiveIndex',
+      'appearance.chromaticAberration',
+      'appearance.lightAngle',
+      'appearance.lightIntensity',
+      'appearance.ambientStrength',
+      'appearance.liquidSaturation',
+      'appearance.fakeGlassRefraction',
       'appearance.glowColor',
     ]) {
       await prefs.remove(key);
