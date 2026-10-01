@@ -190,6 +190,8 @@ class HostSearch {
     Map<String, String>? headers,
     String referer = '',
     ResponseType? responseType,
+    bool? followRedirects,
+    int? maxRedirects,
   }) async {
     await _throttle();
     return _client.get<dynamic>(
@@ -201,6 +203,8 @@ class HostSearch {
           if (referer.isNotEmpty) 'Referer': referer,
           ...?headers,
         },
+        followRedirects: followRedirects,
+        maxRedirects: maxRedirects,
       ),
     );
   }
@@ -929,6 +933,86 @@ class HostSearch {
       return null;
     }
   }
+
+  /// 解析公开芸音歌单链接，再读取歌单详情。
+  ///
+  /// 除了网页链接，这里也支持电脑端/手机端分享出来的 `163cn.tv` 短链。
+  /// 短链本身没有歌单 ID，Dio 会跟随 HTTP 跳转；同时检查最终 URI、每一跳
+  /// 的 Location 和落地 HTML 中的 canonical/og:url，避免只依赖某一种分享页。
+  Future<NeteasePlaylistInfo?> neteasePlaylistFromUrl(String url) async {
+    final String input = _normalizeNeteaseShareUrl(url);
+    final String? directId = extractNeteasePlaylistId(input);
+    if (directId != null) return neteasePlaylist(directId);
+    try {
+      final Response<dynamic> response = await _get(
+        input,
+        referer: 'https://music.163.com/',
+        responseType: ResponseType.plain,
+        headers: <String, String>{
+          'Accept': 'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'zh-CN,zh;q=0.9',
+        },
+        followRedirects: true,
+        maxRedirects: 8,
+      );
+      final String html = response.data?.toString() ?? '';
+      final String redirectText = <String>[
+        response.realUri.toString(),
+        for (final RedirectRecord redirect in response.redirects)
+          redirect.location.toString(),
+      ].join('\n');
+      final String? id =
+          extractNeteasePlaylistId(redirectText) ??
+          extractNeteasePlaylistId(html);
+      return id == null ? null : await neteasePlaylist(id);
+    } catch (error) {
+      lastError = _humanize(error);
+      return null;
+    }
+  }
+
+  /// 从芸音网页、`163cn.tv` 短链、重定向地址或页面元数据中提取歌单 ID。
+  ///
+  /// 保留为纯函数便于单测。分享页可能多次 URL 编码，最多解码三次，
+  /// 兼容 `playlist?id=...`、`/playlist/<id>`、canonical、og:url 和 JSON 字段。
+  @visibleForTesting
+  static String? extractNeteasePlaylistId(String value) {
+    String text = _normalizeNeteaseShareUrl(value);
+    for (int index = 0; index < 3; index++) {
+      String decoded;
+      try {
+        decoded = Uri.decodeFull(text);
+      } on FormatException {
+        break;
+      }
+      if (decoded == text) break;
+      text = _normalizeNeteaseShareUrl(decoded);
+    }
+    final List<RegExp> patterns = <RegExp>[
+      RegExp(r'(?:playlist|playlist%2f)[/\\]{0,2}(\d+)', caseSensitive: false),
+      RegExp(r'[?#&](?:id|playlistId)=(\d+)', caseSensitive: false),
+      RegExp(
+        r'"(?:playlistId|playlist_id|id)"\s*:\s*"?(\d+)',
+        caseSensitive: false,
+      ),
+      RegExp(r'(?:playlist|歌单)[^\d]{0,80}(\d+)', caseSensitive: false),
+    ];
+    for (final RegExp pattern in patterns) {
+      final RegExpMatch? match = pattern.firstMatch(text);
+      final String? id = match?.group(1);
+      if (id != null && RegExp(r'^\d+$').hasMatch(id)) return id;
+    }
+    return null;
+  }
+
+  static String _normalizeNeteaseShareUrl(String value) => value
+      .trim()
+      .replaceAll(r'\&', '&')
+      .replaceAll(r'\_', '_')
+      .replaceAll('&amp;', '&')
+      .replaceAll(r'\/', '/')
+      .replaceAll(r'\u002F', '/')
+      .replaceAll(r'\u0026', '&');
 
   /// 读取公开鹅音歌单。只读取标题和曲目元数据，不读取播放 URL。
   ///

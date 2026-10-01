@@ -397,6 +397,45 @@ const text = "@name 正文里的假名字";
       );
     });
 
+    test('芸音歌单分享：网页链接和 163cn.tv 跳转后的地址都能提取真实 ID', () {
+      expect(
+        HostSearch.extractNeteasePlaylistId(
+          'https://music.163.com/playlist?id=14060779871',
+        ),
+        '14060779871',
+      );
+      expect(
+        HostSearch.extractNeteasePlaylistId(
+          'https://music.163.com/#/playlist/14060779871',
+        ),
+        '14060779871',
+      );
+      expect(
+        HostSearch.extractNeteasePlaylistId(
+          'https://music.163.com/m/playlist?app_version=9.6.05&id=2284533792&userid=1498548088',
+        ),
+        '2284533792',
+      );
+      expect(
+        HostSearch.extractNeteasePlaylistId(
+          '<meta property="og:url" content="https://music.163.com/playlist?id=14060779871">',
+        ),
+        '14060779871',
+      );
+      expect(
+        HostSearch.extractNeteasePlaylistId(
+          r'https%3A%2F%2Fmusic.163.com%2Fplaylist%3Fid%3D14060779871',
+        ),
+        '14060779871',
+      );
+      // 原始 163cn.tv 短链不携带 ID，应用层会先跟随 HTTP 跳转，
+      // 因此纯提取器不会把短 token 误当成歌单编号。
+      expect(
+        HostSearch.extractNeteasePlaylistId('https://163cn.tv/bhAgQcfX'),
+        isNull,
+      );
+    });
+
     test('酷狗（mobilecdn）：hash 当 songid，duration 是秒', () {
       final Map<String, dynamic> fixture = jsonDecode('''
       {"status":1,"data":{"total":999,"info":[

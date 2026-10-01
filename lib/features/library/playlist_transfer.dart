@@ -132,7 +132,7 @@ Future<PlaylistTransferResult?> importPlaylist(
           labelText: '$platformName歌单链接',
           hintText: mode == _PlaylistImportMode.qq
               ? '支持 y.qq.com 或 c6.y.qq.com 分享链接'
-              : 'https://music.163.com/playlist?id=…',
+              : '支持 music.163.com 或 163cn.tv 分享链接',
         ),
       ),
       actions: <Widget>[
@@ -159,13 +159,12 @@ Future<PlaylistTransferResult> _importNeteasePlaylist(
   String input,
   WidgetRef ref,
 ) async {
-  final String? playlistId = _neteasePlaylistId(input);
-  if (playlistId == null) {
+  final String normalized = input.trim().replaceAll(r'\&', '&');
+  if (!_isNeteasePlaylistUrl(normalized)) {
     throw const FormatException('芸音歌单链接格式无效');
   }
-  final NeteasePlaylistInfo? info = await HostSearch.instance.neteasePlaylist(
-    playlistId,
-  );
+  final NeteasePlaylistInfo? info = await HostSearch.instance
+      .neteasePlaylistFromUrl(normalized);
   if (info == null || info.tracks.isEmpty) {
     throw const FormatException('芸音歌单读取失败，可能是私密歌单或接口暂时不可用');
   }
@@ -267,20 +266,13 @@ Future<PlaylistTransferResult?> _importHoHPlaylistFile(WidgetRef ref) async {
   );
 }
 
-String? _neteasePlaylistId(String input) {
-  final String normalized = input
-      .trim()
-      .replaceAll(r'\&', '&')
-      .replaceAll(r'\_', '_')
-      .replaceAll('&amp;', '&');
-  final RegExpMatch? direct = RegExp(r'[?&]id=(\d+)').firstMatch(normalized);
-  if (direct != null) return direct.group(1);
-  final Uri? uri = Uri.tryParse(normalized);
-  final String? queryId = uri?.queryParameters['id'];
-  if (queryId != null && RegExp(r'^\d+$').hasMatch(queryId)) return queryId;
-  final RegExpMatch? match = RegExp(r'(?:playlist|歌单)[^\d]*(\d+)')
-      .firstMatch(normalized);
-  return match?.group(1);
+bool _isNeteasePlaylistUrl(String input) {
+  final Uri? uri = Uri.tryParse(input);
+  final String host = uri?.host.toLowerCase() ?? '';
+  return host == '163cn.tv' ||
+      host.endsWith('.163cn.tv') ||
+      host == 'music.163.com' ||
+      host.endsWith('.music.163.com');
 }
 
 bool _isQqPlaylistUrl(String input) {
