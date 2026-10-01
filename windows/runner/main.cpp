@@ -70,7 +70,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
-  // 原生 runner 使用标准标题栏窗口，1280×800 是包含原生非客户区的初始外框尺寸。
+  // 无边框 runner 的初始 Flutter 内容尺寸；圆角外框和自绘标题栏由 Flutter
+  // 页面与 window_manager 在首帧前后共同完成。
   Win32Window::Size size(1280, 800);
   // 窗口标题（显示名）。注意区分：
   //   - 这里是给用户看的标题 "HoH music"

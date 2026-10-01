@@ -11,6 +11,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'features/library/library_store.dart';
 import 'features/player/player_page.dart';
@@ -20,6 +21,7 @@ import 'platforms/windows/global_hotkey_service.dart';
 import 'platforms/windows/lyrics_overlay.dart';
 import 'platforms/windows/smtc_service.dart';
 import 'platforms/windows/tray_service.dart';
+import 'platforms/windows/window_frame.dart';
 import 'shared/constants.dart';
 import 'shared/theme/app_accent.dart';
 import 'shared/theme/app_colors.dart';
@@ -79,6 +81,16 @@ class HoHMusicApp extends ConsumerWidget {
     // 桌面歌词浮层：置顶、鼠标穿透的独立小窗（0.0.25）
     if (LyricsOverlayHost.isSupported) {
       home = LyricsOverlayHost(child: home);
+    }
+
+    // Windows 使用 Flutter 自绘标题栏和圆角外框；区域裁剪只作用于窗口边缘，
+    // 不参与页面内容布局。
+    if (WindowFrameSync.supported) {
+      home = DragToResizeArea(
+        resizeEdgeSize: 8,
+        resizeEdgeColor: Colors.transparent,
+        child: WindowFrameSync(child: home),
+      );
     }
 
     final Widget app = MaterialApp(

@@ -9,6 +9,7 @@ import 'core/source/lx_selftest.dart';
 import 'core/source/online_selftest.dart';
 import 'platforms/windows/debug_autoexit.dart';
 import 'platforms/windows/debug_autoplay.dart';
+import 'platforms/windows/desktop_window.dart';
 
 /// HoH music 应用入口。
 ///
@@ -53,9 +54,9 @@ Future<void> main(List<String> args) async {
   //    方便脚本 / 无头环境验证播放管线，Release 下恒为空。
   final List<String> autoPlayPaths = resolveDebugAutoPlayPaths(args);
 
-  // ③ Windows runner 自行等待 Flutter 首帧再显示窗口。启动前修改原生
-  // 窗口样式在部分机器上会触发 flutter_windows.dll 访问违例；外观定制
-  // 不应阻断播放器启动。窗口操作后续交给平台 UI 生命周期处理。
+  // ③ 在 runner 显示 Flutter 首帧前切换为无边框窗口，恢复 HoH 自绘标题栏
+  // 和圆角外框；setup 内部失败只记录日志，不阻断播放器启动。
+  await DesktopWindow.setup();
 
   // ④ 调试自动退出（`--exit-after=秒`）：截图脚本用它收尾，
   //    走的是托盘清理那条路，不会在任务栏留下幽灵图标。

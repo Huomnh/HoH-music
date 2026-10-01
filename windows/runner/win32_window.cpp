@@ -137,11 +137,12 @@ bool Win32Window::Create(const std::wstring& title,
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
-  // 使用 Windows 标准窗口框，让系统负责标题栏、最小化、最大化和关闭；
-  // Flutter 只负责内容区域，避免自绘窗口按钮与非客户区状态不同步。
+  // 先创建可由 window_manager 转为无边框的顶层窗口；Flutter 首帧前由
+  // DesktopWindow.setAsFrameless() 完成最终样式，HoH 自绘标题栏负责交互。
 
   HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
+      window_class, title.c_str(),
+      WS_POPUP | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU,
       Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
       Scale(size.width, scale_factor), Scale(size.height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this);

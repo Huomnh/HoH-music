@@ -1,12 +1,10 @@
 /// desktop_window.dart
 ///
-/// Windows runner 在创建主窗口时使用标准 WS_OVERLAPPEDWINDOW 样式，
-/// 因此标题栏、最小化、最大化和关闭由 Windows 原生非客户区负责。
+/// Windows runner 创建无标题栏顶层窗口，Flutter 自绘标题栏负责窗口操作。
 ///
 /// 1. 窗口背景——仅设置为透明，玻璃面板由 Flutter 自绘；不启用窗口级
 ///    DWM/Acrylic 材质，避免整窗透视模糊和启动阻塞。
-/// setup 保留为后续平台窗口外壳的显式配置入口；Windows 默认启动路径不在
-/// runApp 前调用它，以免窗口管理器初始化与 Flutter 首帧发生竞态。
+/// setup 在 runApp 前完成无边框和透明背景准备，runner 等 Flutter 首帧后显示窗口。
 library;
 
 import 'dart:io';
@@ -58,10 +56,7 @@ abstract final class DesktopWindow {
     }
   }
 
-  /// 显式配置桌面窗口的尺寸、背景和约束（当前 Windows runner 启动路径不调用）。
-  ///
-  /// 如果其他桌面平台外壳需要主动配置，可在 runApp 前调用；Windows 当前
-  /// 由 runner 在创建时直接确定标准原生窗口样式，避免首帧期间动态改框。
+  /// 显式配置桌面窗口的无边框、尺寸、背景和约束。
   static Future<void> setup({
     Size size = const Size(1280, 800),
     Size minimumSize = const Size(960, 640),
@@ -75,8 +70,8 @@ abstract final class DesktopWindow {
       await windowManager.ensureInitialized();
       _winLog('windowManager initialized');
 
-      // 不调用 setAsFrameless：Windows 原生标题栏和系统按钮由 runner 保留。
-      // Flutter 内容仍然可以使用透明背景与自己的玻璃面板。
+      // 必须在首帧前去掉系统非客户区，否则会出现原生框 + HoH 标题栏双层叠加。
+      await windowManager.setAsFrameless();
       await windowManager.setBackgroundColor(Colors.transparent);
       await windowManager.setSize(size);
       await windowManager.setMinimumSize(minimumSize);
@@ -89,9 +84,7 @@ abstract final class DesktopWindow {
       } catch (error) {
         _winLog('shadow unavailable (non-fatal): $error');
       }
-      _winLog(
-        'native frame / background / size ready before first frame',
-      );
+      _winLog('rounded Flutter frame will sync after the first frame');
     } catch (error, stack) {
       // 窗口定制失败不能让应用自动退出；runner 仍会显示 Flutter 首帧，
       // 用户至少可以使用应用并看到未能应用的原生窗口样式。

@@ -40,7 +40,7 @@ flutter build windows --debug
 1. `flutter analyze` 无错误。
 2. `flutter test` 全量通过，不能将历史断言失败当作预期通过。
 3. `flutter build windows --release` 成功，检查产物依赖和安装/启动。
-4. 在干净 Windows 用户配置下测试首次启动、重复启动只唤回一个窗口、点击原生关闭按钮时是否出现“取消 / 保留后台 / 退出程序”选择、托盘退出、设置保存、导入音乐、播放/暂停/切歌、进度条拖动、歌词（含长句、翻译、放大字号时不应出现 BOTTOM OVERFLOWED）、下载及退出后进程是否消失。runner 创建阶段使用 `WS_OVERLAPPEDWINDOW` 标准原生标题栏，系统负责顶部程序框和窗口按钮；紧凑播放器从侧栏“紧凑播放器”进入，外框为 360×316。初始外框为 1280×800，不再使用 WindowFrameSync 或 Flutter 自绘标题栏；lib/app.dart 同时隔离 Flutter 语义树，以规避 Flutter 3.47.5 accessibility bridge 的 AXTree 崩溃。
+4. 在干净 Windows 用户配置下测试首次启动、重复启动只唤回一个窗口、点击 HoH 自绘关闭按钮时是否出现“取消 / 保留后台 / 退出程序”选择、托盘退出、设置保存、导入音乐、播放/暂停/切歌、进度条拖动、歌词（含长句、翻译、放大字号时不应出现 BOTTOM OVERFLOWED）、下载及退出后进程是否消失。runner 创建 `WS_POPUP + WS_THICKFRAME` 顶层窗口，`window_manager` 在首帧前完成无边框配置，Flutter 标题栏负责窗口按钮；`WindowFrameSync`/`DragToResizeArea` 负责圆角和边缘缩放。紧凑播放器入口位于标题栏或侧栏“紧凑播放器”，外框为 340×284；保留后台应隐藏主窗口和任务栏入口，但保留托盘隐藏图标与播放。初始窗口为 1280×800；lib/app.dart 同时隔离 Flutter 语义树，以规避 Flutter 3.47.5 accessibility bridge 的 AXTree 崩溃。
 5. 核验版本显示 `0.1.0-beta.1`、安装包文件名/架构、许可证和第三方依赖清单。
 6. 正式公开分发前，用可信代码签名证书签署安装器并验证签名；当前生成的 beta 安装器未签名。
 

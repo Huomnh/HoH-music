@@ -31,6 +31,7 @@ import '../../core/audio/player_engine.dart' show Track;
 import '../../core/audio/player_providers.dart';
 import '../../core/source/source_models.dart' show qualityLabel;
 import '../../platforms/windows/desktop_window.dart';
+import '../../shared/constants.dart';
 import '../../shared/theme/app_accent.dart';
 import '../../shared/theme/app_background.dart';
 import '../../shared/theme/app_colors.dart';
@@ -67,7 +68,7 @@ class PlayerPage extends ConsumerStatefulWidget {
 class _PlayerPageState extends ConsumerState<PlayerPage> {
   /// 紧凑播放器固定尺寸：新增歌词/桌面歌词快捷按钮后，260 高度会让
   /// 控制台底部溢出；284 保持紧凑比例，同时给底部控制和队列安全区留出空间。
-  static const Size _compactWindowSize = Size(360, 316);
+  static const Size _compactWindowSize = Size(340, 284);
 
   /// 队列抽屉是否展开。
   bool _queueOpen = false;
@@ -207,37 +208,55 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     }
     try {
       if (entering) {
-        _normalWindowSize = await windowManager.getSize();
-        // 先切换 Flutter 内容，让动画从用户点击时立即开始；窗口 API
-        // 随后并行准备约束，避免连续 IPC await 把切换卡在旧页面上。
+        // 先记住 Flutter 当前逻辑尺寸并切换内容，不能让 getSize 的平台通道
+        // 决定按钮有没有视觉反馈；它失败时仍可用布局尺寸还原主窗口。
+        _normalWindowSize = MediaQuery.sizeOf(context);
         if (mounted) {
           setState(() {
             _compactMode = true;
             _compactPinned = true;
           });
         }
-        await Future.wait(<Future<void>>[
-          windowManager.setAlwaysOnTop(true),
-          windowManager.setMinimumSize(_compactWindowSize),
-          windowManager.setMaximumSize(_compactWindowSize),
-          windowManager.setResizable(false),
-        ]);
+        try {
+          _normalWindowSize = await windowManager.getSize();
+        } catch (_) {
+          // 使用上面从布局读取的尺寸继续切换。
+        }
+        // 窗口插件的平台通道按顺序改约束，避免并行调用相互覆盖，造成
+        // setSize 被旧的最大/最小尺寸拒绝，紧凑 UI 已切换但窗口不缩小。
+        await windowManager.setAlwaysOnTop(true);
+        await windowManager.setResizable(false);
+        await windowManager.setMinimumSize(_compactWindowSize);
+        await windowManager.setMaximumSize(_compactWindowSize);
         await windowManager.setSize(_compactWindowSize);
         await _alignCompactWindow();
       } else {
         // 退出时也先恢复主内容，避免等待窗口还原期间出现“点了没反应”。
         if (mounted) setState(() => _compactMode = false);
-        await Future.wait(<Future<void>>[
-          windowManager.setAlwaysOnTop(false),
-          windowManager.setMinimumSize(const Size(960, 640)),
-          windowManager.setMaximumSize(const Size(10000, 10000)),
-          windowManager.setResizable(true),
-        ]);
+        await windowManager.setAlwaysOnTop(false);
+        await windowManager.setMaximumSize(const Size(10000, 10000));
+        await windowManager.setMinimumSize(const Size(960, 640));
+        await windowManager.setResizable(true);
         await windowManager.setSize(_normalWindowSize);
         await windowManager.center();
       }
     } catch (_) {
       if (mounted) setState(() => _compactMode = !entering);
+      // 平台 API 失败时把窗口状态也回滚到当前 UI 对应模式。
+      try {
+        if (entering) {
+          await windowManager.setAlwaysOnTop(false);
+          await windowManager.setMaximumSize(const Size(10000, 10000));
+          await windowManager.setMinimumSize(const Size(960, 640));
+          await windowManager.setResizable(true);
+          await windowManager.setSize(_normalWindowSize);
+        } else {
+          await windowManager.setResizable(false);
+          await windowManager.setMinimumSize(_compactWindowSize);
+          await windowManager.setMaximumSize(_compactWindowSize);
+          await windowManager.setSize(_compactWindowSize);
+        }
+      } catch (_) {}
     } finally {
       _compactTransitioning = false;
     }
@@ -252,6 +271,60 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
       CompactCorner.bottomRight => Alignment.bottomRight,
     };
     await windowManager.setAlignment(alignment);
+  }
+
+  /// 窄窗口下用底部菜单替代隐藏的侧栏导航。
+  void _showCompactNavigation(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: GlassPanel(
+            borderRadius: BorderRadius.circular(18),
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                ListTile(
+                  leading: const Icon(Icons.play_circle_outline),
+                  title: const Text('正在播放'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _showPlayer();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.tune_rounded),
+                  title: const Text('外观设置'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _showSettings();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.library_music_outlined),
+                  title: const Text('播放设置'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _showPlaybackSettings();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.info_outline_rounded),
+                  title: const Text('版本说明'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _showVersionInfo();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _toggleCompactPinned() async {
@@ -269,6 +342,7 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
   @override
   Widget build(BuildContext context) {
     final BlurConfig config = BlurConfigScope.of(context);
+    final bool settingsOpen = _view != _MainView.player;
     final PlayerControlLayout controlLayout =
         ref.watch(playerControlLayoutProvider).value ??
         PlayerControlLayout.sidebar;
@@ -345,6 +419,15 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
                 : Column(
                     key: const ValueKey<String>('full-player'),
                     children: <Widget>[
+                      _TitleBar(
+                        settingsOpen: settingsOpen,
+                        onToggleSettings: settingsOpen
+                            ? _showPlayer
+                            : _showSettings,
+                        onShowNavigation: () => _showCompactNavigation(context),
+                        compactMode: false,
+                        onToggleCompact: _toggleCompactMode,
+                      ),
                       Expanded(
                         child: Padding(
                           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -666,9 +749,241 @@ enum _MainView {
 
 // ════════════════════════════════════════════════════════════════
 //  标题栏
-/// Windows 原生标题栏负责窗口移动、最小化、最大化和关闭；Flutter 页面不再重复绘制一层窗口框。
-
 // ════════════════════════════════════════════════════════════════
+
+/// HoH 自绘标题栏：窗口外框、圆角和按钮统一由 Flutter 控制。
+class _TitleBar extends StatelessWidget {
+  const _TitleBar({
+    required this.settingsOpen,
+    required this.onToggleSettings,
+    required this.onShowNavigation,
+    required this.compactMode,
+    required this.onToggleCompact,
+  });
+
+  final bool settingsOpen;
+  final VoidCallback onToggleSettings;
+  final VoidCallback onShowNavigation;
+  final bool compactMode;
+  final VoidCallback onToggleCompact;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppAccent accent = AppAccent.of(context);
+    return DragToMoveArea(
+      child: Container(
+        height: 40,
+        color: Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                gradient: LinearGradient(
+                  colors: <Color>[
+                    accent.secondary,
+                    accent.tertiary,
+                    accent.primary,
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              AppConstants.appName,
+              style: TextStyle(
+                color: Color(0xD9FFFFFF),
+                fontSize: 12,
+                letterSpacing: 0.4,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const Expanded(child: SizedBox.expand()),
+            if (MediaQuery.sizeOf(context).width < 600) ...<Widget>[
+              _TitleIconButton(
+                tooltip: '导航',
+                icon: Icons.menu_rounded,
+                onTap: onShowNavigation,
+              ),
+              const SizedBox(width: 6),
+            ],
+            _GlassSettingsButton(active: settingsOpen, onTap: onToggleSettings),
+            const SizedBox(width: 6),
+            Tooltip(
+              message: compactMode ? '退出紧凑模式' : '紧凑播放器',
+              child: IconButton(
+                iconSize: 17,
+                onPressed: onToggleCompact,
+                icon: Icon(
+                  compactMode
+                      ? Icons.open_in_full_rounded
+                      : Icons.picture_in_picture_alt_rounded,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const _WindowButtons(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TitleIconButton extends StatelessWidget {
+  const _TitleIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: IconButton(
+      iconSize: 18,
+      tooltip: tooltip,
+      onPressed: onTap,
+      icon: Icon(icon),
+    ),
+  );
+}
+
+class _GlassSettingsButton extends StatefulWidget {
+  const _GlassSettingsButton({required this.active, required this.onTap});
+
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  State<_GlassSettingsButton> createState() => _GlassSettingsButtonState();
+}
+
+class _GlassSettingsButtonState extends State<_GlassSettingsButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool lit = widget.active || _hovered;
+    return Tooltip(
+      message: widget.active ? '返回播放页' : '外观设置',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white.withValues(alpha: lit ? 0.14 : 0.06),
+            ),
+            child: Icon(
+              Icons.tune_rounded,
+              size: 14,
+              color: lit ? Colors.white : const Color(0xB3FFFFFF),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 自绘窗口按钮，实际操作仍由 window_manager 执行。
+class _WindowButtons extends StatefulWidget {
+  const _WindowButtons();
+
+  @override
+  State<_WindowButtons> createState() => _WindowButtonsState();
+}
+
+class _WindowButtonsState extends State<_WindowButtons> {
+  int _hovered = -1;
+  bool _maximized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncMaximized();
+  }
+
+  Future<void> _syncMaximized() async {
+    if (!DesktopWindow.isSupported) return;
+    try {
+      final bool value = await windowManager.isMaximized();
+      if (mounted) setState(() => _maximized = value);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<IconData> icons = <IconData>[
+      Icons.remove,
+      _maximized ? Icons.fullscreen_exit : Icons.crop_square,
+      Icons.close,
+    ];
+    const List<String> tooltips = <String>['最小化', '最大化 / 还原', '关闭'];
+    return Row(
+      children: List<Widget>.generate(icons.length, (int i) {
+        final bool close = i == 2;
+        final bool hovered = _hovered == i;
+        return Tooltip(
+          message: tooltips[i],
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => setState(() => _hovered = i),
+            onExit: (_) => setState(() => _hovered = -1),
+            child: GestureDetector(
+              onTap: () => _onTap(i),
+              child: Container(
+                width: 44,
+                height: 40,
+                alignment: Alignment.center,
+                color: hovered
+                    ? (close
+                          ? const Color(0xFFE81123)
+                          : const Color(0x1FFFFFFF))
+                    : Colors.transparent,
+                child: Icon(
+                  icons[i],
+                  size: close ? 15 : 13,
+                  color: hovered ? Colors.white : const Color(0xB3FFFFFF),
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Future<void> _onTap(int index) async {
+    if (!DesktopWindow.isSupported) return;
+    switch (index) {
+      case 0:
+        await windowManager.minimize();
+      case 1:
+        if (await windowManager.isMaximized()) {
+          await windowManager.unmaximize();
+        } else {
+          await windowManager.maximize();
+        }
+        await _syncMaximized();
+      case 2:
+        await windowManager.close();
+    }
+  }
+}
 
 /// 侧边栏内容——对应设计稿的 `.sidebar`。
 ///

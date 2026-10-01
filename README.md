@@ -47,7 +47,7 @@ HoH music 不隶属于上述项目。第三方依赖、数据和媒体资源按�
 ## 当前功能
 
 - 本地音乐库：导入文件/文件夹、元数据读取、增量扫描、排序与收藏；所有歌曲只展示本地与已配置 WebDAV 曲库，不混入在线播放历史。
-- 播放：MediaKit/libmpv、播放队列、播放模式、进度与音量控制；可单独从曲库列表或当前队列移除歌曲，不会删除磁盘文件。进度条沿用 HoH 播放后端，提供主题渐变、平滑追帧、拖动即时反馈和轻量播放头动画，ZeroBit/Pure Music 仅作为前端交互语义参考。外观设置中的“播放页布局”可切换侧栏控制和底部控制；切换使用共享 Flutter 状态与平滑尺寸动画，宽屏三段式、窄屏自动折行。主页面切换使用 360ms 淡入/横移，主 UI 与紧凑播放器切换使用轻量淡入/缩放/位移；三种控制区都提供“展开歌词页”和桌面歌词快速开关，桌面歌词状态沿用 `lyrics.desktopOverlay`。紧凑播放器固定外框为 360×316（包含原生标题栏），队列打开时会给底部控制区保留安全空间。
+- 播放：MediaKit/libmpv、播放队列、播放模式、进度与音量控制；可单独从曲库列表或当前队列移除歌曲，不会删除磁盘文件。进度条沿用 HoH 播放后端，提供主题渐变、平滑追帧、拖动即时反馈和轻量播放头动画，ZeroBit/Pure Music 仅作为前端交互语义参考。外观设置中的“播放页布局”可切换侧栏控制和底部控制；切换使用共享 Flutter 状态与平滑尺寸动画，宽屏三段式、窄屏自动折行。主页面切换使用 360ms 淡入/横移，主 UI 与紧凑播放器切换使用轻量淡入/缩放/位移；三种控制区都提供“展开歌词页”和桌面歌词快速开关，桌面歌词状态沿用 `lyrics.desktopOverlay`。Windows 播放页使用 `window_manager` 无边框窗口与 HoH 自绘圆角标题栏，紧凑播放器固定外框为 340×284，队列打开时会给底部控制区保留安全空间。
 - 歌词：LRC/TTML、翻译同步与 Flutter 播放页视觉器；外观设置提供 HoH 自有的“星屿、微澜、浮光、弦动、留声、余晖”六个模式。“留声”是专辑信息歌词页：左侧显示封面、标题、歌手、专辑和音质摘要，右侧以低负载逐字文本呈现歌词；其余模式保留逐行、逐字扫光、抬升和轻量切句差异。播放页以 media_kit 位置作锚点并用 Flutter `Ticker` 补帧，减少逐字高亮卡顿；普通滚动列表限制在约 30Hz。歌词 painter 的改编来源见开源清单，主播放页、滚动歌词和 Windows 桌面歌词共用 HoH `LyricsTimeline`；Windows 桌面歌词是无玻璃、无边框的透明双行文字 HUD，保留逐字扫光、描边、拖动和锁定穿透。HoH 播放、解析、翻译和 seek 后端保持不变。TTML 使用源提供的行/词时间，普通 LRC 只能按行区间平滑估算，不代表源歌词提供了逐字时间戳。
 - 字体：内置耀圆体作为 UI 与播放页歌词默认字体；外观设置支持分别导入 TTF 替换 UI 字体和歌词字体，字体文件保存在用户应用数据目录。
 - 在线音源：单个活动音源、LX 自定义音源脚本兼容、搜索/在线播放/音质档位选择；安装包将脚本放在独立 `music音源` 文件夹，启动时自动扫描登记并启用第一个可用脚本。
@@ -62,7 +62,7 @@ HoH music 不隶属于上述项目。第三方依赖、数据和媒体资源按�
 - 液态玻璃：所有 HoH `GlassPanel` 与试用页统一使用 `liquid_glass_plus`；Windows 使用插件 Fake Glass 稳定路径。慢速背景约 8.3fps、主 UI 边框扫光约 16.7fps，并在应用暂停时停止时钟；桌面歌词不再使用玻璃材质。Windows 当前仅提供本地 Debug 预览，GPU 占用仍需在目标设备实测。
 - 液态玻璃参数：外观设置支持厚度、磨砂、折射率、色散、光照、环境光、背景饱和度和 Skia 回退折射，并会保存到本地及主题包。
 - QQ 音乐等其他平台 URL适配、私密/登录态歌单、M3U/XSPF 和多端同步尚未实现；当前已支持公开网易云歌单和稳定的 HoH 原生备份格式。
-- Windows 集成：标准 Win32 标题栏、单实例唤回、紧凑播放器、桌面歌词、系统托盘、快捷键和系统媒体控制。Windows runner 在创建阶段使用 `WS_OVERLAPPEDWINDOW`，由系统负责标题栏、最小化、最大化、关闭和边缘缩放；Flutter 不再重复绘制 HoH 标题栏，也不再使用自定义窗口区域裁剪，因此不会出现双层程序框或自定义白边。runner 对原生非客户区应用 DWM 深色标题/边框/文字配色，Flutter 页面仍负责自己的主题玻璃效果。紧凑播放器入口位于侧栏“紧凑播放器”，固定外框为 360×316 以容纳原生标题栏。Flutter 3.47.5 的 Windows accessibility bridge 会在动态语义树更新时崩溃，因此 Windows 根组件暂时隔离 Flutter 语义树。窗口关闭时弹出“取消 / 保留后台 / 退出程序”选择：保留后台继续维持播放、托盘和桌面歌词，退出程序完成清理后结束进程；托盘不可用时保留直接退出兜底。初始外框尺寸为 1280×800；播放页歌词槽位会按可用高度自动缩放，翻译和长句不会产生溢出警告。
+- Windows 集成：`window_manager` 无边框窗口、HoH 自绘圆角标题栏、单实例唤回、紧凑播放器、桌面歌词、系统托盘、快捷键和系统媒体控制。Windows runner 创建 `WS_POPUP + WS_THICKFRAME` 顶层窗口，`DesktopWindow.setup()` 在首帧前完成无边框配置；Flutter 标题栏负责移动、最小化、最大化/还原、关闭和紧凑入口，`WindowFrameSync`/`DragToResizeArea` 负责圆角外框与边缘缩放。Flutter 3.47.5 的 Windows accessibility bridge 会在动态语义树更新时崩溃，因此 Windows 根组件暂时隔离 Flutter 语义树。窗口关闭时弹出“取消 / 保留后台 / 退出程序”选择：保留后台隐藏主窗口并移除任务栏入口，但保留托盘隐藏图标、播放和桌面歌词；退出程序完成清理后结束进程。托盘不可用时保留直接退出兜底。初始窗口尺寸为 1280×800；紧凑播放器固定为 340×284；播放页歌词槽位会按可用高度自动缩放，翻译和长句不会产生溢出警告。
 
 功能细节以当前代码和专题文档为准；不表示在线音源一定能提供所有音质/技术元数据。在线曲目不显示推算码率，本地码率以媒体解析器读到的文件信息为准。
 
@@ -70,7 +70,7 @@ HoH music 不隶属于上述项目。第三方依赖、数据和媒体资源按�
 
 - `flutter analyze --no-pub`：通过（2026-10-01，含原生 Win32 标题栏、播放页双布局、页面/紧凑播放器动效、进度条和 Windows 启停链路）。
 - `flutter test --reporter compact`：84 项通过（2026-10-01；测试环境会输出 MediaKit 原生依赖不可用提示，但测试本身通过）。
-- Windows Debug 预览：先运行 `powershell -ExecutionPolicy Bypass -File scripts\patch-smtc-cargokit-hidden-path.ps1`，再运行 `flutter build windows --debug`。该修复处理 `smtc_windows` Cargokit 未使用 `-Force` 遍历隐藏的 AppData 路径的问题。当前回归已验证标准 Win32 标题栏样式（`CAPTION=True`、`POPUP=False`）、普通 Debug 进程稳定运行，`--exit-after=12` 退出码为 0 且无残留进程；仍需在干净用户环境验收实际托盘退出、播放和安装器。
+- Windows Debug 预览：先运行 `powershell -ExecutionPolicy Bypass -File scripts\patch-smtc-cargokit-hidden-path.ps1`，再运行 `flutter build windows --debug`。该修复处理 `smtc_windows` Cargokit 未使用 `-Force` 遍历隐藏的 AppData 路径的问题。当前回归已验证 HoH 无边框窗口样式（`CAPTION=False`、`POPUP=True`）、圆角外框链路、普通 Debug 进程稳定运行，`--exit-after=8` 退出码为 0 且无残留进程；仍需在干净用户环境验收实际托盘退出、播放和安装器。
 - `flutter build windows --release`：历史通过，产物为 `build/windows/x64/runner/Release/hoh_music.exe`。
 - Windows 安装器：本地生成于 `dist/windows/HoH-music-Setup-0.1.0-beta.1-Windows-x64.exe`；安装目录可自定义，并默认创建桌面快捷方式。安装包不提交源码仓库，公开下载请使用 [GitHub Releases](https://github.com/Huomnh/HoH-music/releases)。
 - 安装器当前未签名；正式公开分发建议使用可信代码签名证书，避免 Windows 发布者未知提示。
