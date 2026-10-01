@@ -75,6 +75,7 @@ HoH music 不隶属于上述项目。第三方依赖、数据和媒体资源按�
 - `flutter build windows --release`：历史通过，产物为 `build/windows/x64/runner/Release/hoh_music.exe`。
 - Windows 安装器：本地生成于 `dist/windows/HoH-music-Setup-0.1.0-beta.1-Windows-x64.exe`；安装目录可自定义，并默认创建桌面快捷方式。安装包不提交源码仓库，公开下载请使用 [GitHub Releases](https://github.com/Huomnh/HoH-music/releases)。
 - 自动更新：Release 构建启动时检查 GitHub Releases；发现更高版本且存在匹配的 Windows x64 `.exe` 安装包时，显示可关闭的非强制更新提示，并通过系统浏览器打开下载链接。版本说明页也提供手动检查和下载入口；网络失败不会影响旧版本使用。发布命名、版本比较和平台筛选规则见 [自动更新机制](docs/更新机制.md)。
+- 版本说明：显示当前版本、外部 GitHub 反馈链接、非强制更新入口和建设性建议/Bug 反馈贡献名单；当前已记录抖音用户“美味蟹堡、染乱.、huaan、采样”。
 - 安装器当前未签名；正式公开分发建议使用可信代码签名证书，避免 Windows 发布者未知提示。
 - 安装需要管理员确认（VC++ 运行库可能需要系统级安装），安装目录可在向导中修改。
 - 干净机器安装/启动、实际播放和下载验收：尚未完成。
