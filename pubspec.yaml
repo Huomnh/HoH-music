@@ -1,11 +1,11 @@
-# HoH music beta application.
+# HoH music stable application.
 # The supported release target and verified toolchain are documented in README.md.
 
 name: hoh_music
 description: "HoH music —— 覆盖 Windows / iOS / Android / Android TV / Apple TV 的全端音乐播放器。"
 publish_to: "none"
 # Versioning and prerelease policy: docs/版本控制规范.md
-version: 0.1.0-beta.1+1
+version: 0.1.0+1
 
 environment:
   sdk: ^3.13.0

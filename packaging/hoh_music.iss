@@ -1,5 +1,5 @@
 #define AppName "HoH music"
-#define AppVersion "0.1.0-beta.1"
+#define AppVersion "0.1.0"
 #define AppPublisher "HoH music"
 #define AppExeName "hoh_music.exe"
 

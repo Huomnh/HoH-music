@@ -97,7 +97,7 @@ class _VersionInfoViewState extends State<VersionInfoView> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  '当前为 Windows beta 版本。Bug、功能建议和版本更新将在 GitHub 仓库中维护。',
+                  '当前为 Windows 0.1.0 稳定版。Bug、功能建议和版本更新将在 GitHub 仓库中维护。',
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 12,
