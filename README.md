@@ -73,6 +73,7 @@ HoH music 不隶属于上述项目。第三方依赖、数据和媒体资源按�
 - Windows Debug 预览：先运行 `powershell -ExecutionPolicy Bypass -File scripts\patch-smtc-cargokit-hidden-path.ps1`，再运行 `flutter build windows --debug`。该修复处理 `smtc_windows` Cargokit 未使用 `-Force` 遍历隐藏的 AppData 路径的问题。当前回归已验证 HoH 无边框窗口样式（`CAPTION=False`、`POPUP=True`）、圆角外框链路、普通 Debug 进程稳定运行，`--exit-after=8` 退出码为 0 且无残留进程；仍需在干净用户环境验收实际托盘退出、播放和安装器。
 - `flutter build windows --release`：历史通过，产物为 `build/windows/x64/runner/Release/hoh_music.exe`。
 - Windows 安装器：本地生成于 `dist/windows/HoH-music-Setup-0.1.0-beta.1-Windows-x64.exe`；安装目录可自定义，并默认创建桌面快捷方式。安装包不提交源码仓库，公开下载请使用 [GitHub Releases](https://github.com/Huomnh/HoH-music/releases)。
+- 自动更新：Release 构建启动时检查 GitHub Releases；发现更高版本且存在匹配的 Windows x64 `.exe` 安装包时，显示可关闭的非强制更新提示，并通过系统浏览器打开下载链接。版本说明页也提供手动检查和下载入口；网络失败不会影响旧版本使用。发布命名、版本比较和平台筛选规则见 [自动更新机制](docs/更新机制.md)。
 - 安装器当前未签名；正式公开分发建议使用可信代码签名证书，避免 Windows 发布者未知提示。
 - 安装需要管理员确认（VC++ 运行库可能需要系统级安装），安装目录可在向导中修改。
 - 干净机器安装/启动、实际播放和下载验收：尚未完成。
@@ -104,6 +105,8 @@ powershell -ExecutionPolicy Bypass -File scripts\package-windows.ps1
 2. 标签填写 `v0.1.0-beta.1`，目标分支选择 `main`，上传 `dist/windows/HoH-music-Setup-0.1.0-beta.1-Windows-x64.exe`。
 3. 发布前可用 `Get-FileHash .\dist\windows\HoH-music-Setup-0.1.0-beta.1-Windows-x64.exe -Algorithm SHA256` 生成校验值，并粘贴到 Release 说明。
 4. 点击 **Publish release** 后，用户即可从 Releases 页面下载；源码仓库仍不提交 `dist/` 安装包。
+
+发布新版本时，必须上传包含 `Windows-x64` 的 `.exe` 安装器；应用启动更新检查会优先选择名称包含 `Setup` 的安装包。Draft/Pre-release 不会触发正式用户更新。
 
 如果本机无法下载 MediaKit 构建资产，可先执行 `scripts/prepare-media-kit.ps1`，详见 [Windows 预览与构建指南](docs/Windows预览指南.md)。
 

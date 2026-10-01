@@ -25,6 +25,10 @@ abstract final class AppConstants {
   /// GitHub 仓库地址。仓库创建后填写，发布包和版本说明页共用此值。
   static const String repositoryUrl = 'https://github.com/Huomnh/HoH-music';
 
+  /// 贡献名单：后续收到用户提供的建设性 Bug/功能建议 ID 后，在这里补录。
+  /// 当前为空时，版本说明页显示“名单待补充”，不会虚构贡献者。
+  static const List<String> contributors = <String>[];
+
   /// 主题包扩展名（zip 打包：配置 + 预览图 + 资源）。
   static const String themeExtension = '.hohtheme';
 

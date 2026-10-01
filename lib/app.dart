@@ -15,6 +15,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'features/library/library_store.dart';
 import 'features/player/player_page.dart';
+import 'features/player/optional_update_prompt.dart';
 import 'platforms/windows/debug_autoplay.dart';
 import 'platforms/windows/debug_glass.dart';
 import 'platforms/windows/global_hotkey_service.dart';
@@ -92,6 +93,9 @@ class HoHMusicApp extends ConsumerWidget {
         child: WindowFrameSync(child: home),
       );
     }
+
+    // 发现当前平台的更高版本安装包时提示，但不阻断播放和页面交互。
+    home = OptionalUpdatePrompt(child: home);
 
     final Widget app = MaterialApp(
       title: AppConstants.appName,
