@@ -8,14 +8,17 @@ import 'package:liquid_glass_plus/liquid_glass_plus.dart';
 import '../../theme/performance_tier.dart';
 
 /// Builds the production glass settings used by both the main UI and preview.
-/// Windows uses the package's supported fake-glass renderer because the shader
-/// path is not stable on every Windows Flutter renderer.
+/// Windows uses the package renderer. Android deliberately uses the stable
+/// low-cost `BackdropFilter` path in [GlassPanel] so smaller screens do not
+/// pay for shader refraction or show displaced list content.
 LiquidGlassSettings buildHohLiquidGlassSettings(
   BlurConfig config, {
   bool enabled = true,
 }) {
   final bool useGlass = enabled && config.frostIntensity > 0;
-  final double thickness = useGlass ? config.glassThickness.clamp(0.0, 18.0) : 0;
+  final double thickness = useGlass
+      ? config.glassThickness.clamp(0.0, 18.0)
+      : 0;
   final double frost = useGlass ? config.frostIntensity.clamp(0.0, 12.0) : 0;
   final double tintAlpha = useGlass
       ? (0.045 + config.tintOpacity.clamp(0.0, 1.0) * 0.12).clamp(0.04, 0.18)

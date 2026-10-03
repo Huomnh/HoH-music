@@ -553,7 +553,7 @@ class _AddToPlaylistButton extends ConsumerWidget {
       tooltip: '加到歌单',
       onPressed: () => showDialog<void>(
         context: context,
-        builder: (BuildContext context) => _AddToPlaylistDialog(track: track),
+        builder: (BuildContext context) => AddToPlaylistDialog(track: track),
       ),
       icon: const Icon(
         Icons.playlist_add_rounded,
@@ -564,8 +564,10 @@ class _AddToPlaylistButton extends ConsumerWidget {
   }
 }
 
-class _AddToPlaylistDialog extends ConsumerWidget {
-  const _AddToPlaylistDialog({required this.track});
+/// 给任意曲目选择目标歌单；移动端播放列表和桌面曲库共用。
+class AddToPlaylistDialog extends ConsumerWidget {
+  /// 创建加歌单弹窗。
+  const AddToPlaylistDialog({super.key, required this.track});
 
   final Track track;
 

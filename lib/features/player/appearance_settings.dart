@@ -3,10 +3,8 @@
 /// 外观设置页（0.0.10 起不再是弹窗；入口在左侧边栏「来源」下面，
 /// 内容显示在右侧主区，与播放面板同一套排版）。
 ///
-/// 三组内容：
-/// 1. **背景** —— 内置场景缩略图 + 自定义背景图（0.0.11 新增）；
-/// 2. **模糊与通透** —— 玻璃模糊强度、通透度；
-/// 3. **边框高光 / 开关** —— 高光强度、高光流动、玻璃效果、界面动画。
+/// 内容包括背景、主题颜色、播放页/歌词/封面布局和界面动画。
+/// 玻璃材质采用固定的低开销方案，不在这里暴露液态玻璃参数。
 ///
 /// 参数机制：默认跟随性能档位（桌面端自动判定「高端」），
 /// 一旦手动调整过就保持用户取值（见 [GlassOverrides]）。
@@ -37,7 +35,6 @@ import '../../shared/widgets/motion/hoh_motion.dart';
 import 'cover_style.dart';
 import 'compact_player_settings.dart';
 import 'lyrics/lyrics_style.dart';
-import 'liquid_glass_plus_preview.dart';
 import 'player_layout_settings.dart';
 
 /// 外观设置页（内嵌在播放页右侧主区）。
@@ -83,8 +80,7 @@ class AppearanceSettingsView extends ConsumerWidget {
             const Text('外观设置', style: _sectionLabel),
             const SizedBox(height: 8),
             Text(
-              '背景随时可换；玻璃参数默认跟随性能档位「${config.tier.label}」'
-              '（桌面端自动判定），调整过的项会保持你的取值。',
+              '背景、主题和播放页布局可以随时调整；界面动画会按你的选择生效。',
               style: const TextStyle(
                 color: AppColors.textTertiary,
                 fontSize: 11.5,
@@ -148,142 +144,8 @@ class AppearanceSettingsView extends ConsumerWidget {
                         const CoverStageSection(),
                         const SizedBox(height: 18),
 
-                        _GroupLabel('Liquid Glass Plus', color: accent.primary),
-                        _SliderRow(
-                          accent: accent,
-                          label: '玻璃染色强度',
-                          hint: '${(config.tintOpacity * 100).round()}%',
-                          value: config.tintOpacity,
-                          max: 1,
-                          onChanged: controller.setTintOpacity,
-                        ),
-                        _SliderRow(
-                          accent: accent,
-                          label: '玻璃厚度',
-                          hint:
-                              '${config.glassThickness.toStringAsFixed(1)} px',
-                          value: config.glassThickness,
-                          max: 30,
-                          onChanged: controller.setGlassThickness,
-                        ),
-                        _SliderRow(
-                          accent: accent,
-                          label: '磨砂强度',
-                          hint: config.frostIntensity.toStringAsFixed(1),
-                          value: config.frostIntensity,
-                          max: 20,
-                          onChanged: controller.setFrostIntensity,
-                        ),
-                        _SliderRow(
-                          accent: accent,
-                          label: '折射率',
-                          hint: config.refractiveIndex.toStringAsFixed(3),
-                          value: config.refractiveIndex,
-                          min: 1,
-                          max: 1.5,
-                          onChanged: controller.setRefractiveIndex,
-                        ),
-                        _SliderRow(
-                          accent: accent,
-                          label: '色散强度',
-                          hint: config.chromaticAberration.toStringAsFixed(3),
-                          value: config.chromaticAberration,
-                          max: 0.03,
-                          onChanged: controller.setChromaticAberration,
-                        ),
-                        _SliderRow(
-                          accent: accent,
-                          label: '光照角度',
-                          hint:
-                              '${(config.lightAngle * 180 / 3.1415926535).round()}°',
-                          value: config.lightAngle,
-                          max: 6.283,
-                          onChanged: controller.setLightAngle,
-                        ),
-                        _SliderRow(
-                          accent: accent,
-                          label: '光照强度',
-                          hint: config.lightIntensity.toStringAsFixed(2),
-                          value: config.lightIntensity,
-                          max: 2,
-                          onChanged: controller.setLightIntensity,
-                        ),
-                        _SliderRow(
-                          accent: accent,
-                          label: '环境光',
-                          hint: config.ambientStrength.toStringAsFixed(2),
-                          value: config.ambientStrength,
-                          max: 1,
-                          onChanged: controller.setAmbientStrength,
-                        ),
-                        _SliderRow(
-                          accent: accent,
-                          label: '背景饱和度倍率',
-                          hint: config.liquidSaturation.toStringAsFixed(2),
-                          value: config.liquidSaturation,
-                          min: 0.5,
-                          max: 2,
-                          onChanged: controller.setLiquidSaturation,
-                        ),
-                        _SliderRow(
-                          accent: accent,
-                          label: 'Skia 回退折射',
-                          hint: config.fakeGlassRefraction.toStringAsFixed(1),
-                          value: config.fakeGlassRefraction,
-                          max: 8,
-                          onChanged: controller.setFakeGlassRefraction,
-                        ),
-                        const SizedBox(height: 8),
-                        OutlinedButton.icon(
-                          onPressed: () => showLiquidGlassPlusPreview(context),
-                          icon: const Icon(Icons.science_outlined, size: 16),
-                          label: const Text('试用 liquid_glass_plus 液态玻璃'),
-                        ),
-                        const Padding(
-                          padding: EdgeInsets.only(top: 6),
-                          child: Text(
-                            '试用面板与主界面使用同一套插件参数。',
-                            style: TextStyle(
-                              color: AppColors.textTertiary,
-                              fontSize: 10.5,
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 12),
-                        _GroupLabel('边框高光', color: accent.primary),
-                        _SliderRow(
-                          accent: accent,
-                          label: '高光强度',
-                          hint: '${(config.glowStrength * 100).round()}%',
-                          value: config.glowStrength.clamp(0.0, 1.0),
-                          max: 1.0,
-                          onChanged: controller.setGlowStrength,
-                        ),
-                        _SwitchRow(
-                          accent: accent,
-                          label: '边框高光流动',
-                          hint: '边框本身被照亮并绕行；固定 14 秒一圈',
-                          value: config.sweepEnabled,
-                          onChanged: controller.setSweep,
-                        ),
-                        const SizedBox(height: 10),
-                        _GlowColorPicker(
-                          selected: config.glowColor,
-                          accent: accent,
-                          onChanged: controller.setGlowColor,
-                        ),
-
                         const SizedBox(height: 12),
                         _GroupLabel('开关', color: accent.primary),
-                        _SwitchRow(
-                          accent: accent,
-                          label: '玻璃效果',
-                          hint: '液态玻璃模糊。关掉后用纯色半透明代替，最省 GPU',
-                          value: config.useBlur,
-                          onChanged: (bool on) =>
-                              controller.setBlurSigma(on ? 16 : 0),
-                        ),
                         _SwitchRow(
                           accent: accent,
                           label: '界面动画',
@@ -1510,145 +1372,6 @@ class _RgbWheelPainter extends CustomPainter {
   @override
   bool shouldRepaint(_RgbWheelPainter oldDelegate) =>
       oldDelegate.selected != selected;
-}
-
-/// 边框高光颜色选择：跟随主题色 + 若干预设色。
-class _GlowColorPicker extends StatelessWidget {
-  const _GlowColorPicker({
-    required this.selected,
-    required this.accent,
-    required this.onChanged,
-  });
-
-  /// 当前自定义颜色（null = 跟随主题色）。
-  final Color? selected;
-  final AppAccent accent;
-  final ValueChanged<Color?> onChanged;
-
-  /// 预设高光色（「几个渐变的颜色」）。
-  static const List<(String, Color)> presets = <(String, Color)>[
-    ('青', Color(0xFF00E5FF)),
-    ('品红', Color(0xFFFF2E88)),
-    ('薄荷', Color(0xFF3DFFC0)),
-    ('琥珀', Color(0xFFFFB259)),
-    ('紫', Color(0xFF9B6BFF)),
-    ('玫瑰', Color(0xFFFF6B9A)),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            Text(
-              '高光颜色',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              selected == null ? '跟随主题色（${accent.source}）' : '自定义',
-              style: const TextStyle(
-                color: AppColors.textTertiary,
-                fontSize: 11,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: <Widget>[
-            // 跟随主题色
-            _Swatch(
-              label: '主题色',
-              colors: <Color>[accent.primary, accent.secondary],
-              selected: selected == null,
-              onTap: () => onChanged(null),
-            ),
-            for (final (String label, Color color) in presets)
-              _Swatch(
-                label: label,
-                colors: <Color>[color, Color.lerp(color, Colors.white, 0.5)!],
-                selected: selected == color,
-                onTap: () => onChanged(color),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// 一个渐变色块（点一下选中）。
-class _Swatch extends StatelessWidget {
-  const _Swatch({
-    required this.label,
-    required this.colors,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final List<Color> colors;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Tooltip(
-          message: label,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: Colors.black.withValues(alpha: 0.22),
-              border: Border.all(
-                color: selected
-                    ? colors.first
-                    : Colors.white.withValues(alpha: 0.12),
-                width: selected ? 1.6 : 1,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Container(
-                  width: 22,
-                  height: 10,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    gradient: LinearGradient(colors: colors),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    color: selected ? Colors.white : const Color(0xBFFFFFFF),
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// 分组小标题（颜色跟随强调色）。

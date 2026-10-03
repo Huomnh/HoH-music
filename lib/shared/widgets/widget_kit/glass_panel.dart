@@ -189,29 +189,30 @@ class _GlassPanelState extends State<GlassPanel> {
         child: Padding(padding: widget.padding, child: widget.child),
       ),
     );
-    // Android 没有跨厂商统一的“系统液态玻璃”公开 API，不能可靠地调用
-    // 某一家系统的私有材质。这里使用 Flutter/Skia 的 BackdropFilter 做
-    // 低强度背景模糊，再叠加高不透明度染色和边框：各家 Android 都能用，
-    // 不采样折射/位移，也不会把下方滚动列表错误折射到当前面板。
-    final Widget material = defaultTargetPlatform == TargetPlatform.android
+    // Android returns to the stable low-cost material: a small backdrop blur
+    // plus an opaque tint. It never samples refracted/displaced content, so
+    // scrolling text cannot bleed into the panel and several panels do not
+    // create the heavier liquid-glass shader path at once.
+    final bool isAndroid = defaultTargetPlatform == TargetPlatform.android;
+    final Widget material = isAndroid
         ? ClipRRect(
             borderRadius: widget.borderRadius,
             child: widget.blurEnabled
                 ? BackdropFilter(
-                    // sigma 6 保留层次但比桌面玻璃轻，避免多个手机面板
-                    // 同时采样背景时造成明显 GPU 压力。
                     filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
                     child: _androidTintedSurface(panelContent),
                   )
                 : _androidTintedSurface(panelContent),
           )
-        : LiquidGlass.withOwnLayer(
+        : widget.blurEnabled
+        ? LiquidGlass.withOwnLayer(
             settings: settings,
             shape: LiquidRoundedSuperellipse(
               borderRadius: widget.borderRadius.topLeft.x,
             ),
             child: panelContent,
-          );
+          )
+        : _androidTintedSurface(panelContent);
     final sweep = _sweep;
     if (sweep == null) return material;
     return Stack(

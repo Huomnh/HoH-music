@@ -141,6 +141,20 @@ int _targetGeneration = 0;
 final Map<String, Future<OnlineTrack>> _matchingInFlight =
     <String, Future<OnlineTrack>>{};
 
+class _PoolRemoteResolution {
+  const _PoolRemoteResolution({
+    required this.index,
+    this.track,
+    this.provider = '',
+    this.failure = '',
+  });
+
+  final int index;
+  final Track? track;
+  final String provider;
+  final String failure;
+}
+
 /// 播放池子里的曲目。
 ///
 /// [append] = true → 追加到队列（搜索 / WebDAV / 其他来源）；
@@ -183,9 +197,10 @@ Future<PoolPlayResult> playPoolTracks(
   // 曲目 id → 它属于哪个源（多源时鉴权头不一样）
   final Map<String, String> davSourceIds = <String, String>{};
 
-  final List<Track> ready = <Track>[];
+  final List<Track?> readyByIndex = List<Track?>.filled(tracks.length, null);
   final List<String> failed = <String>[];
   final List<String> providers = <String>[];
+  final List<(int, OnlineTrack)> onlineRequests = <(int, OnlineTrack)>[];
   final String clickedId = (startIndex >= 0 && startIndex < tracks.length)
       ? tracks[startIndex].id
       : '';
@@ -196,7 +211,7 @@ Future<PoolPlayResult> playPoolTracks(
 
     // ① 已经有地址（本地文件 / WebDAV 已重建 / 在线已解析）
     if (track.uri.isNotEmpty) {
-      ready.add(track);
+      readyByIndex[i] = track;
       continue;
     }
 
@@ -215,16 +230,14 @@ Future<PoolPlayResult> playPoolTracks(
         failed.add('${track.title}：WebDAV 源没配置好');
         continue;
       }
-      ready.add(
-        Track(
-          id: track.id,
-          uri: client.streamUrl(path),
-          title: track.title,
-          artist: track.artist,
-          album: track.album,
-          duration: track.duration,
-          isRemote: true,
-        ),
+      readyByIndex[i] = Track(
+        id: track.id,
+        uri: client.streamUrl(path),
+        title: track.title,
+        artist: track.artist,
+        album: track.album,
+        duration: track.duration,
+        isRemote: true,
       );
       // 这一首属于哪个源（入队时要用它的鉴权头）
       if (source != null) davSourceIds[track.id] = source.id;
@@ -238,40 +251,31 @@ Future<PoolPlayResult> playPoolTracks(
       failed.add('${track.title}：找不到这首的来源信息');
       continue;
     }
-    final SourceResolveResult resolved = await host.resolveMusicUrl(
-      online,
-      quality: quality,
-    );
-    if (!resolved.ok || resolved.url.isEmpty) {
-      failed.add('${online.title}：${resolved.error}');
-      continue;
-    }
-    if (resolved.provider.isNotEmpty) providers.add(resolved.provider);
-
-    String? lyric = await HostSearch.instance.lyricFor(online);
-    if (lyric == null || lyric.trim().isEmpty) {
-      final String fromSource = await host.fetchLyric(online);
-      if (fromSource.trim().isNotEmpty) lyric = fromSource;
-    }
-    ready.add(
-      Track(
-        id: online.id,
-        uri: resolved.url,
-        title: online.title,
-        artist: online.artist,
-        album: online.album,
-        duration: online.duration == Duration.zero ? null : online.duration,
-        isRemote: true,
-        lyrics: lyric,
-        // URL 后缀/查询参数不是文件签名；在线播放阶段只显示未验证，
-        // 下载完成后再按真实容器更新本地曲目。
-        formatOverride: '',
-        source: online.platformLabel,
-        genre: online.tags.isEmpty ? null : online.tags.first,
-        quality: quality ?? online.quality,
-      ),
-    );
+    onlineRequests.add((i, online));
   }
+
+  // 音源解析彼此独立，并行请求可以把大歌单的等待从“每首累加”降为
+  // “最慢一批请求”。歌词不是建立播放队列的前置条件，只给当前点击的
+  // 曲目优先请求；其余歌曲切换到播放页时再按需加载，避免几十首歌词把
+  // 首曲播放堵在队列后面。
+  final List<_PoolRemoteResolution> remoteResults =
+      await _resolveOnlinePoolTracks(
+        host: host,
+        requests: onlineRequests,
+        clickedId: clickedId,
+        quality: quality,
+      );
+  for (final _PoolRemoteResolution result in remoteResults) {
+    final Track? resolvedTrack = result.track;
+    if (resolvedTrack != null) {
+      readyByIndex[result.index] = resolvedTrack;
+      if (result.provider.isNotEmpty) providers.add(result.provider);
+    } else if (result.failure.isNotEmpty) {
+      failed.add(result.failure);
+    }
+  }
+
+  final List<Track> ready = readyByIndex.whereType<Track>().toList();
 
   onProgress?.call(tracks.length, tracks.length, '');
 
@@ -418,6 +422,83 @@ Future<PoolPlayResult> playPoolTracks(
     failed: failed,
     providers: providers.toSet().toList(growable: false),
     appended: append,
+  );
+}
+
+Future<List<_PoolRemoteResolution>> _resolveOnlinePoolTracks({
+  required SourceHostController host,
+  required List<(int, OnlineTrack)> requests,
+  required String clickedId,
+  required String? quality,
+}) async {
+  if (requests.isEmpty) return const <_PoolRemoteResolution>[];
+  final List<_PoolRemoteResolution?> results =
+      List<_PoolRemoteResolution?>.filled(requests.length, null);
+  int cursor = 0;
+
+  Future<void> worker() async {
+    while (true) {
+      final int current = cursor++;
+      if (current >= requests.length) return;
+      final (int index, OnlineTrack online) = requests[current];
+      results[current] = await _resolveOnlinePoolTrack(
+        host: host,
+        index: index,
+        online: online,
+        clickedId: clickedId,
+        quality: quality,
+      );
+    }
+  }
+
+  await Future.wait(
+    List<Future<void>>.generate(math.min(4, requests.length), (_) => worker()),
+  );
+  return results.whereType<_PoolRemoteResolution>().toList(growable: false);
+}
+
+Future<_PoolRemoteResolution> _resolveOnlinePoolTrack({
+  required SourceHostController host,
+  required int index,
+  required OnlineTrack online,
+  required String clickedId,
+  required String? quality,
+}) async {
+  final SourceResolveResult resolved = await host.resolveMusicUrl(
+    online,
+    quality: quality,
+  );
+  if (!resolved.ok || resolved.url.isEmpty) {
+    return _PoolRemoteResolution(
+      index: index,
+      failure: '${online.title}：${resolved.error}',
+    );
+  }
+  String? lyric;
+  if (online.id == clickedId) {
+    lyric = await HostSearch.instance.lyricFor(online);
+    if (lyric == null || lyric.trim().isEmpty) {
+      final String fromSource = await host.fetchLyric(online);
+      if (fromSource.trim().isNotEmpty) lyric = fromSource;
+    }
+  }
+  return _PoolRemoteResolution(
+    index: index,
+    provider: resolved.provider,
+    track: Track(
+      id: online.id,
+      uri: resolved.url,
+      title: online.title,
+      artist: online.artist,
+      album: online.album,
+      duration: online.duration == Duration.zero ? null : online.duration,
+      isRemote: true,
+      lyrics: lyric,
+      formatOverride: '',
+      source: online.platformLabel,
+      genre: online.tags.isEmpty ? null : online.tags.first,
+      quality: quality ?? online.quality,
+    ),
   );
 }
 

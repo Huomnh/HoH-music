@@ -407,55 +407,6 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: LinearGradient(
-                    colors: <Color>[
-                      accent.primary.withValues(alpha: 0.95),
-                      accent.secondary.withValues(alpha: 0.8),
-                    ],
-                  ),
-                ),
-                child: const Icon(Icons.search_rounded, color: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      '在线搜索',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      '搜索歌曲，选择音质后直接播放或下载',
-                      style: TextStyle(
-                        color: AppColors.textTertiary,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _InfoPill(
-                icon: Icons.graphic_eq_rounded,
-                text: host.isEmpty ? '未连接音源' : '单音源模式',
-                color: host.isEmpty ? AppColors.textTertiary : accent.primary,
-              ),
-            ],
-          ),
-          SizedBox(height: compact ? 9 : 16),
-
           // ── 搜索行 ────────────────────────────────────────────
           LayoutBuilder(
             builder: (BuildContext context, BoxConstraints constraints) {
@@ -542,7 +493,9 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
             },
           ),
 
-          if (_status.isNotEmpty) ...<Widget>[
+          // 成功搜索后的平台统计不再占据固定空间；只在搜索中或出错时显示，
+          // 让下方歌曲列表成为页面的主要区域。
+          if (_status.isNotEmpty && (_busy || !_statusOk)) ...<Widget>[
             const SizedBox(height: 10),
             SourceStatusLine(
               text: _status,
@@ -643,38 +596,6 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
                     },
                   ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({
-    required this.icon,
-    required this.text,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String text;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.24)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 5),
-          Text(text, style: TextStyle(color: color, fontSize: 10.5)),
         ],
       ),
     );

@@ -282,18 +282,18 @@ void main() {
     expect(find.text('背景'), findsOneWidget);
     expect(find.text('自定义图片'), findsOneWidget);
 
-    // 0.0.8 精简后**当前确实存在**的项
-    expect(find.text('Liquid Glass Plus'), findsOneWidget);
-    expect(find.text('边框高光'), findsOneWidget);
-    expect(find.text('玻璃厚度'), findsOneWidget);
-    expect(find.text('磨砂强度'), findsOneWidget);
-    expect(find.text('折射率'), findsOneWidget);
-    expect(find.text('色散强度'), findsOneWidget);
-    expect(find.text('Skia 回退折射'), findsOneWidget);
-    expect(find.text('高光强度'), findsOneWidget);
-    expect(find.text('玻璃染色强度'), findsOneWidget);
-    expect(find.text('玻璃效果'), findsOneWidget);
-    expect(find.text('边框高光流动'), findsOneWidget);
+    // 0.0.1 Android/低开销玻璃方案：不在外观页暴露液态玻璃自定义项。
+    expect(find.text('Liquid Glass Plus'), findsNothing);
+    expect(find.text('边框高光'), findsNothing);
+    expect(find.text('玻璃厚度'), findsNothing);
+    expect(find.text('磨砂强度'), findsNothing);
+    expect(find.text('折射率'), findsNothing);
+    expect(find.text('色散强度'), findsNothing);
+    expect(find.text('Skia 回退折射'), findsNothing);
+    expect(find.text('高光强度'), findsNothing);
+    expect(find.text('玻璃染色强度'), findsNothing);
+    expect(find.text('玻璃效果'), findsNothing);
+    expect(find.text('边框高光流动'), findsNothing);
     expect(find.text('界面动画'), findsOneWidget);
     expect(find.text('恢复默认'), findsOneWidget);
     // 0.0.23：低配显卡模式去掉（档位本来就是自动判定的，手开关多余）
@@ -830,7 +830,7 @@ void main() {
     );
   });
 
-  testWidgets('外观设置：切换玻璃开关后滚动位置不会弹回顶端（0.0.23）', (WidgetTester tester) async {
+  testWidgets('外观设置：外部玻璃配置变化后滚动位置不会弹回顶端（0.0.23）', (WidgetTester tester) async {
     await _pumpApp(tester);
     await tester.tap(find.text('外观设置'));
     await _settle(tester);
@@ -849,7 +849,7 @@ void main() {
     final double before = tester.state<ScrollableState>(scroll).position.pixels;
     expect(before, greaterThan(50), reason: '得先滚下去才有得比');
 
-    // ① 开「边框高光流动」：面板里会多出一层高光 Stack
+    // ① 外部开启边框高光：面板里会多出一层高光 Stack
     container.read(glassOverridesProvider.notifier).setSweep(true);
     await _settle(tester);
     expect(
@@ -858,7 +858,7 @@ void main() {
       reason: '高光层的出现不能把内容整棵重建（会把滚动位置丢掉）',
     );
 
-    // ② 关「玻璃效果」：BackdropFilter 会换成纯色层，同样是结构变化
+    // ② 外部关闭玻璃：BackdropFilter 会换成纯色层，同样是结构变化
     container.read(glassOverridesProvider.notifier).setBlurSigma(0);
     await _settle(tester);
     expect(
