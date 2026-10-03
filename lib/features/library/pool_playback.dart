@@ -13,6 +13,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -84,6 +85,58 @@ final pendingPlaylistProvider =
     NotifierProvider<PendingPlaylistController, PendingPlaylist?>(
       PendingPlaylistController.new,
     );
+
+final math.Random _pendingPlaylistRandom = math.Random();
+
+/// 按统一播放模式步进“待解析歌单”。
+///
+/// 在线歌单首次播放时，底层播放器只会暂时载入当前已经解析好的那一首，
+/// 但 [pendingPlaylistProvider] 保存了完整歌单。桌面端和 Android 端都必须
+/// 从这里切歌，否则 Android 直接调用 `player.next()` 只能看到这一首。
+Future<PoolPlayResult> stepPendingPlaylist(
+  WidgetRef ref, {
+  required int delta,
+  bool automatic = false,
+}) async {
+  final PendingPlaylist? pending = ref.read(pendingPlaylistProvider);
+  final PlayerController controller = ref.read(
+    playerControllerProvider.notifier,
+  );
+  if (pending == null) {
+    if (delta < 0) {
+      await controller.previous();
+    } else {
+      await controller.next();
+    }
+    return const PoolPlayResult(played: 1);
+  }
+  if (pending.tracks.isEmpty || pending.activeIndex < 0) {
+    return const PoolPlayResult();
+  }
+
+  final PlaybackMode mode = ref.read(playerControllerProvider).mode;
+  final int length = pending.tracks.length;
+  int target;
+  if (automatic && mode == PlaybackMode.repeatOne) {
+    target = pending.activeIndex;
+  } else if (mode == PlaybackMode.shuffle && length > 1) {
+    target = pending.activeIndex;
+    while (target == pending.activeIndex) {
+      target = _pendingPlaylistRandom.nextInt(length);
+    }
+  } else {
+    target = pending.activeIndex + delta;
+    if (target < 0 || target >= length) {
+      if (mode == PlaybackMode.repeatAll ||
+          (automatic && mode == PlaybackMode.repeatOne)) {
+        target = delta < 0 ? length - 1 : 0;
+      } else {
+        return const PoolPlayResult();
+      }
+    }
+  }
+  return playPendingPlaylistTrack(ref, pending.tracks, target);
+}
 
 int _targetGeneration = 0;
 final Map<String, Future<OnlineTrack>> _matchingInFlight =

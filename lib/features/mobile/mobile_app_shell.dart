@@ -7,6 +7,7 @@
 /// 与歌词 provider 均复用桌面实现，平台差异只停留在 UI 组织层。
 library;
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -18,11 +19,11 @@ import '../../core/metadata/cover_art.dart';
 import '../library/library_views.dart';
 import '../library/playlists.dart';
 import '../library/playlist_transfer.dart';
+import '../library/pool_playback.dart';
 import '../player/appearance_settings.dart';
 import '../player/cover_stage.dart';
 import '../player/playback_settings.dart';
 import '../player/version_info_view.dart';
-import '../player/lyrics/lyrics_style.dart';
 import '../source/online_search_view.dart';
 import '../source/source_manager_view.dart';
 import 'android_karaoke_lyrics.dart';
@@ -51,6 +52,21 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<PlayerUiState>(playerControllerProvider, (
+      PlayerUiState? previous,
+      PlayerUiState next,
+    ) {
+      if (!next.completed) return;
+      final PendingPlaylist? current = ref.read(pendingPlaylistProvider);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (current != null) {
+          unawaited(stepPendingPlaylist(ref, delta: 1, automatic: true));
+        } else if (next.mode == PlaybackMode.shuffle) {
+          unawaited(ref.read(playerControllerProvider.notifier).next());
+        }
+      });
+    });
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBody: true,
@@ -96,6 +112,7 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
     return switch (_tab) {
       0 => _MobileHomeView(
         onOpenLibrary: () => setState(() => _tab = 2),
+        onOpenPlayer: _openPlayer,
         onOpenDiscover: () => setState(() {
           _tab = 1;
           _focusDiscoverSearch = true;
@@ -171,7 +188,7 @@ class _MobileTopBar extends StatelessWidget {
           IconButton(
             tooltip: '打开正在播放',
             onPressed: onOpenPlayer,
-            icon: const Icon(Icons.music_note_rounded),
+            icon: const VinylRecord(size: 34, labelRatio: 0.5),
           ),
         ],
       ),
@@ -182,6 +199,7 @@ class _MobileTopBar extends StatelessWidget {
 class _MobileHomeView extends ConsumerWidget {
   const _MobileHomeView({
     required this.onOpenLibrary,
+    required this.onOpenPlayer,
     required this.onOpenDiscover,
     required this.onOpenPlaylist,
     required this.onOpenSearch,
@@ -189,6 +207,7 @@ class _MobileHomeView extends ConsumerWidget {
   });
 
   final VoidCallback onOpenLibrary;
+  final VoidCallback onOpenPlayer;
   final VoidCallback onOpenDiscover;
   final ValueChanged<String> onOpenPlaylist;
   final VoidCallback onOpenSearch;
@@ -209,7 +228,9 @@ class _MobileHomeView extends ConsumerWidget {
       children: <Widget>[
         if (track == null)
           _EmptyMobileHome(accent: accent, onOpenDiscover: onOpenDiscover)
-        else ...<Widget>[_MobileWelcomeCard(track: track, accent: accent)],
+        else ...<Widget>[
+          _MobileWelcomeCard(track: track, accent: accent, onTap: onOpenPlayer),
+        ],
         const SizedBox(height: 18),
         const _MobileSectionTitle(title: '快捷入口'),
         const SizedBox(height: 10),
@@ -312,64 +333,73 @@ class _EmptyMobileHome extends StatelessWidget {
 }
 
 class _MobileWelcomeCard extends StatelessWidget {
-  const _MobileWelcomeCard({required this.track, required this.accent});
+  const _MobileWelcomeCard({
+    required this.track,
+    required this.accent,
+    required this.onTap,
+  });
 
   final Track track;
   final AppAccent accent;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GlassPanel(
-      borderRadius: BorderRadius.circular(24),
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          const Text(
-            '正在播放',
-            style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: <Widget>[
-              const CoverStage(size: 92),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      track.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: GlassPanel(
+        borderRadius: BorderRadius.circular(24),
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text(
+              '正在播放',
+              style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: <Widget>[
+                const CoverStage(size: 92),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        track.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      track.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: accent.primary),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      track.album,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textTertiary,
-                        fontSize: 12,
+                      const SizedBox(height: 6),
+                      Text(
+                        track.artist,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: accent.primary),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      Text(
+                        track.album,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textTertiary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -995,7 +1025,7 @@ class _MobileMiniPlayer extends ConsumerWidget {
               ),
             ),
             IconButton(
-              onPressed: controller.previous,
+              onPressed: () => stepPendingPlaylist(ref, delta: -1),
               icon: const Icon(Icons.skip_previous_rounded),
               iconSize: 20,
               padding: EdgeInsets.zero,
@@ -1011,7 +1041,7 @@ class _MobileMiniPlayer extends ConsumerWidget {
               constraints: const BoxConstraints.tightFor(width: 38, height: 38),
             ),
             IconButton(
-              onPressed: controller.next,
+              onPressed: () => stepPendingPlaylist(ref, delta: 1),
               icon: const Icon(Icons.skip_next_rounded),
               iconSize: 20,
               padding: EdgeInsets.zero,
@@ -1128,7 +1158,27 @@ class _MobileNowPlaying extends ConsumerWidget {
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: <Widget>[
                               IconButton(
-                                onPressed: controller.previous,
+                                tooltip: '加入喜欢',
+                                onPressed: () => ref
+                                    .read(playlistsProvider.notifier)
+                                    .toggleFavorite(track.id),
+                                icon: Icon(
+                                  ref.watch(isFavoriteProvider(track.id))
+                                      ? Icons.favorite_rounded
+                                      : Icons.favorite_border_rounded,
+                                ),
+                                style: IconButton.styleFrom(
+                                  side: BorderSide(
+                                    color: accent.primary.withValues(
+                                      alpha: 0.65,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: '上一首',
+                                onPressed: () =>
+                                    stepPendingPlaylist(ref, delta: -1),
                                 icon: const Icon(Icons.skip_previous_rounded),
                                 iconSize: 34,
                               ),
@@ -1145,22 +1195,30 @@ class _MobileNowPlaying extends ConsumerWidget {
                                 ),
                               ),
                               IconButton(
-                                onPressed: controller.next,
+                                tooltip: '下一首',
+                                onPressed: () =>
+                                    stepPendingPlaylist(ref, delta: 1),
                                 icon: const Icon(Icons.skip_next_rounded),
                                 iconSize: 34,
                               ),
+                              IconButton(
+                                tooltip: '播放列表',
+                                onPressed: () => _showMobileQueue(
+                                  context,
+                                  ref,
+                                  state,
+                                  controller,
+                                ),
+                                icon: const Icon(Icons.queue_music_rounded),
+                                style: IconButton.styleFrom(
+                                  side: BorderSide(
+                                    color: accent.primary.withValues(
+                                      alpha: 0.65,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ],
-                          ),
-                          const SizedBox(height: 12),
-                          _MobileNowPlayingActions(
-                            track: track,
-                            onQueue: () => _showMobileQueue(
-                              context,
-                              ref,
-                              state,
-                              controller,
-                            ),
-                            onModes: () => _showMobileLyricsModes(context, ref),
                           ),
                         ],
                       ),
@@ -1173,87 +1231,15 @@ class _MobileNowPlaying extends ConsumerWidget {
   }
 }
 
-class _MobileNowPlayingActions extends ConsumerWidget {
-  const _MobileNowPlayingActions({
-    required this.track,
-    required this.onQueue,
-    required this.onModes,
-  });
-
-  final Track track;
-  final VoidCallback onQueue;
-  final VoidCallback onModes;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final AppAccent accent = AppAccent.of(context);
-    final bool favorite = ref.watch(isFavoriteProvider(track.id));
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: <Widget>[
-        OutlinedButton.icon(
-          onPressed: () =>
-              ref.read(playlistsProvider.notifier).toggleFavorite(track.id),
-          icon: Icon(
-            favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            color: favorite ? accent.secondary : null,
-          ),
-          label: Text(favorite ? '已喜欢' : '加入喜欢'),
-        ),
-        const SizedBox(width: 10),
-        OutlinedButton.icon(
-          onPressed: onQueue,
-          icon: const Icon(Icons.queue_music_rounded),
-          label: const Text('播放列表'),
-        ),
-        const SizedBox(width: 10),
-        IconButton(
-          tooltip: '歌词模式',
-          onPressed: onModes,
-          icon: const Icon(Icons.lyrics_rounded),
-        ),
-      ],
-    );
-  }
-}
-
-Future<void> _showMobileLyricsModes(BuildContext context, WidgetRef ref) async {
-  final LyricsStyle style =
-      ref.read(lyricsStyleProvider).value ?? const LyricsStyle();
-  await showModalBottomSheet<void>(
-    context: context,
-    showDragHandle: true,
-    builder: (BuildContext sheetContext) => SafeArea(
-      child: ListView(
-        shrinkWrap: true,
-        children: <Widget>[
-          const ListTile(
-            title: Text('选择歌词视觉模式'),
-            subtitle: Text('安卓端默认使用轻量逐字效果，降低资源占用'),
-          ),
-          for (final LyricsLayoutMode mode in LyricsLayoutMode.values)
-            RadioListTile<LyricsLayoutMode>(
-              value: mode,
-              groupValue: style.layout,
-              title: Text(mode.label),
-              onChanged: (LyricsLayoutMode? value) async {
-                if (value == null) return;
-                await ref.read(lyricsStyleProvider.notifier).setLayout(value);
-                if (sheetContext.mounted) Navigator.pop(sheetContext);
-              },
-            ),
-        ],
-      ),
-    ),
-  );
-}
-
 Future<void> _showMobileQueue(
   BuildContext context,
   WidgetRef ref,
   PlayerUiState state,
   PlayerController controller,
 ) async {
+  final PendingPlaylist? pending = ref.read(pendingPlaylistProvider);
+  final List<Track> tracks = pending?.tracks ?? state.queue;
+  final int activeIndex = pending?.activeIndex ?? state.currentIndex;
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
@@ -1264,20 +1250,32 @@ Future<void> _showMobileQueue(
         child: Column(
           children: <Widget>[
             ListTile(
-              title: Text('播放列表（${state.queue.length}）'),
-              trailing: IconButton(
-                tooltip: '关闭',
-                onPressed: () => Navigator.pop(sheetContext),
-                icon: const Icon(Icons.close_rounded),
+              title: Text('播放列表（${tracks.length}）'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  IconButton(
+                    tooltip: '播放顺序：${state.mode.label}',
+                    onPressed: () => ref
+                        .read(playerControllerProvider.notifier)
+                        .cyclePlaybackMode(),
+                    icon: Icon(_mobileModeIcon(state.mode)),
+                  ),
+                  IconButton(
+                    tooltip: '关闭',
+                    onPressed: () => Navigator.pop(sheetContext),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
               ),
             ),
             Expanded(
               child: ListView.builder(
-                itemCount: state.queue.length,
+                itemCount: tracks.length,
                 itemBuilder: (BuildContext context, int index) {
-                  final Track track = state.queue[index];
+                  final Track track = tracks[index];
                   return ListTile(
-                    selected: index == state.currentIndex,
+                    selected: index == activeIndex,
                     leading: Text('${index + 1}'),
                     title: Text(
                       track.title,
@@ -1290,7 +1288,15 @@ Future<void> _showMobileQueue(
                       overflow: TextOverflow.ellipsis,
                     ),
                     onTap: () async {
-                      await controller.playAt(index);
+                      if (pending != null) {
+                        await playPendingPlaylistTrack(
+                          ref,
+                          pending.tracks,
+                          index,
+                        );
+                      } else {
+                        await controller.playAt(index);
+                      }
                       if (sheetContext.mounted) Navigator.pop(sheetContext);
                     },
                   );
@@ -1303,6 +1309,13 @@ Future<void> _showMobileQueue(
     ),
   );
 }
+
+IconData _mobileModeIcon(PlaybackMode mode) => switch (mode) {
+  PlaybackMode.sequential => Icons.playlist_play_rounded,
+  PlaybackMode.repeatAll => Icons.repeat_rounded,
+  PlaybackMode.repeatOne => Icons.repeat_one_rounded,
+  PlaybackMode.shuffle => Icons.shuffle_rounded,
+};
 
 class _MobileProgress extends ConsumerWidget {
   const _MobileProgress();

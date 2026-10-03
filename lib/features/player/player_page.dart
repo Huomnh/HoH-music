@@ -20,6 +20,7 @@
 /// 系统集成通过独立模块接入。
 library;
 
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
@@ -354,11 +355,14 @@ class _PlayerPageState extends ConsumerState<PlayerPage> {
     ) {
       if (!next.completed) return;
       final PendingPlaylist? current = ref.read(pendingPlaylistProvider);
-      if (current == null) return;
-      final int nextIndex = current.activeIndex + 1;
-      if (nextIndex >= current.tracks.length) return;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) playPendingPlaylistTrack(ref, current.tracks, nextIndex);
+        if (!mounted) return;
+        if (current != null) {
+          unawaited(stepPendingPlaylist(ref, delta: 1, automatic: true));
+        } else if (next.mode == PlaybackMode.shuffle) {
+          // 随机模式关闭底层原列表循环，在完成事件后由控制器手动推进。
+          unawaited(ref.read(playerControllerProvider.notifier).next());
+        }
       });
     });
 
@@ -1357,31 +1361,9 @@ class _AccentDot extends StatelessWidget {
 Future<void> _stepPendingPlaylist(
   BuildContext context,
   WidgetRef ref,
-  PlayerController controller,
   int delta,
 ) async {
-  final PendingPlaylist? pending = ref.read(pendingPlaylistProvider);
-  if (pending == null) {
-    if (delta < 0) {
-      await controller.previous();
-    } else {
-      await controller.next();
-    }
-    return;
-  }
-  int target = pending.activeIndex + delta;
-  if (target < 0 || target >= pending.tracks.length) {
-    if (pending.tracks.isEmpty ||
-        ref.read(playerControllerProvider).mode != PlaybackMode.repeatAll) {
-      return;
-    }
-    target = delta < 0 ? pending.tracks.length - 1 : 0;
-  }
-  final PoolPlayResult result = await playPendingPlaylistTrack(
-    ref,
-    pending.tracks,
-    target,
-  );
+  final PoolPlayResult result = await stepPendingPlaylist(ref, delta: delta);
   if (result.failed.isNotEmpty && context.mounted) {
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(result.failed.first)));
@@ -1583,8 +1565,7 @@ class _Console extends ConsumerWidget {
                   iconSize: 17,
                   enabled: hasTrack,
                   tooltip: '上一首',
-                  onTap: () =>
-                      _stepPendingPlaylist(context, ref, controller, -1),
+                  onTap: () => _stepPendingPlaylist(context, ref, -1),
                 ),
                 const SizedBox(width: 12),
                 _PlayButton(
@@ -1601,8 +1582,7 @@ class _Console extends ConsumerWidget {
                   iconSize: 17,
                   enabled: hasTrack,
                   tooltip: '下一首',
-                  onTap: () =>
-                      _stepPendingPlaylist(context, ref, controller, 1),
+                  onTap: () => _stepPendingPlaylist(context, ref, 1),
                 ),
                 const SizedBox(width: 6),
                 _RoundButton(
@@ -1690,7 +1670,7 @@ class _BottomControlBar extends ConsumerWidget {
             iconSize: 17,
             enabled: hasTrack,
             tooltip: '上一首',
-            onTap: () => _stepPendingPlaylist(context, ref, controller, -1),
+            onTap: () => _stepPendingPlaylist(context, ref, -1),
           ),
           const SizedBox(width: 10),
           _PlayButton(
@@ -1707,7 +1687,7 @@ class _BottomControlBar extends ConsumerWidget {
             iconSize: 17,
             enabled: hasTrack,
             tooltip: '下一首',
-            onTap: () => _stepPendingPlaylist(context, ref, controller, 1),
+            onTap: () => _stepPendingPlaylist(context, ref, 1),
           ),
           const SizedBox(width: 6),
           _RoundButton(
@@ -2839,6 +2819,14 @@ class _QueuePanel extends ConsumerWidget {
                   ),
                 ),
                 const Spacer(),
+                IconButton(
+                  tooltip: '播放顺序：${state.mode.label}',
+                  onPressed: () => ref
+                      .read(playerControllerProvider.notifier)
+                      .cyclePlaybackMode(),
+                  icon: Icon(_modeIcon(state.mode), size: 16),
+                  visualDensity: VisualDensity.compact,
+                ),
                 MouseRegion(
                   cursor: SystemMouseCursors.click,
                   child: GestureDetector(

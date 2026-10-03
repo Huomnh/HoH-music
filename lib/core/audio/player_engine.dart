@@ -472,7 +472,6 @@ class PlayerEngine {
       StreamController<Track>.broadcast();
 
   List<Track> _queue = <Track>[];
-  int _playlistGeneration = 0;
 
   /// 随机播放状态（自管顺序，见 [setShuffleMode]）。
   bool _shuffle = false;
@@ -582,34 +581,30 @@ class PlayerEngine {
     unawaited(_enrichMetadata(files));
   }
 
-  /// 本地曲库快速首播：先打开点中的文件，剩余列表在后台追加。
+  /// 本地曲库首播：一次性打开完整队列并定位到点中的曲目。
+  ///
+  /// 旧实现为了首帧速度只打开第一首，再在后台逐个 `add`。在 Android
+  /// 上用户很容易在追加完成前点击下一首，底层播放列表因此只有一首，
+  /// 也会让歌单看起来没有队列。一次性提交完整 Playlist 能保证 UI 队列、
+  /// media_kit 队列和下一首行为始终一致；元数据读取仍由调用方在后台完成。
   Future<void> loadLocalTracksFast(
     List<Track> tracks, {
     int startIndex = 0,
     bool autoPlay = true,
   }) async {
     if (tracks.isEmpty) return;
-    final int generation = ++_playlistGeneration;
     final int index = startIndex.clamp(0, tracks.length - 1);
-    final List<Track> ordered = <Track>[
-      tracks[index],
-      ...tracks.sublist(index + 1),
-      ...tracks.sublist(0, index),
-    ];
-    _queue = ordered;
+    _queue = List<Track>.of(tracks);
     _queueController.add(queue);
     _rebuildShuffleOrder();
     await player.open(
-      Playlist(<Media>[Media(ordered.first.uri)], index: 0),
+      Playlist(
+        tracks.map((Track track) => Media(track.uri)).toList(growable: false),
+        index: index,
+      ),
       play: autoPlay,
     );
-    _syncShufflePos(0);
-    unawaited(() async {
-      for (final Track track in ordered.skip(1)) {
-        if (generation != _playlistGeneration) return;
-        await player.add(Media(track.uri));
-      }
-    }());
+    _syncShufflePos(index);
   }
 
   /// 用一批**远端**曲目替换队列并开始播放（WebDAV 等）。

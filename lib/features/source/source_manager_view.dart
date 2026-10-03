@@ -257,6 +257,9 @@ class _SourceManagerViewState extends ConsumerState<SourceManagerPanel> {
         // ── 音乐库（0.0.56：用户要求放到**这一页最上面**）──────────────
         const LibraryPanel(),
         const SizedBox(height: 10),
+        // ── WebDAV（统一放在音乐库与音源脚本之间）────────────────────
+        const WebDavSourcesPanel(),
+        const SizedBox(height: 10),
         const Divider(color: AppColors.divider, height: 1),
         const SizedBox(height: 10),
 
@@ -288,7 +291,9 @@ class _SourceManagerViewState extends ConsumerState<SourceManagerPanel> {
         const SizedBox(height: 14),
 
         // ── 操作行 ────────────────────────────────────────────
-        Row(
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
           children: <Widget>[
             FilledButton.icon(
               onPressed: _busy ? null : _importFiles,
@@ -330,7 +335,6 @@ class _SourceManagerViewState extends ConsumerState<SourceManagerPanel> {
               label: const Text('从 URL 导入'),
               style: TextButton.styleFrom(foregroundColor: Colors.white),
             ),
-            const Spacer(),
             TextButton.icon(
               onPressed: _busy ? null : () => _reload(),
               icon: const Icon(Icons.refresh_rounded, size: 16),
@@ -717,13 +721,14 @@ class WebDavSourcesPanel extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Icon(Icons.cloud_outlined, size: 15, color: accent.primary),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
                 sources.isEmpty
-                    ? 'WebDAV 网盘：还没有添加。去左侧「来源 → WebDAV」填地址账号，点「保存并连接」就会加到这里。'
+                    ? 'WebDAV 网盘：还没有添加。'
                     : 'WebDAV 网盘：${sources.length} 个（共 ${tracks.length} 首已进曲库）',
                 style: const TextStyle(
                   color: Color(0xD9FFFFFF),
@@ -731,6 +736,18 @@ class WebDavSourcesPanel extends ConsumerWidget {
                   height: 1.5,
                 ),
               ),
+            ),
+          ],
+        ),
+        Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 4,
+          children: <Widget>[
+            TextButton.icon(
+              onPressed: () => _showAddWebDavDialog(context, ref),
+              icon: const Icon(Icons.add_link_rounded, size: 15),
+              label: const Text('添加网盘'),
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
             ),
             TextButton.icon(
               onPressed: () =>
@@ -820,6 +837,143 @@ class WebDavSourcesPanel extends ConsumerWidget {
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+Future<void> _showAddWebDavDialog(BuildContext context, WidgetRef ref) async {
+  final _WebDavFormResult? result = await showDialog<_WebDavFormResult>(
+    context: context,
+    builder: (BuildContext dialogContext) => const _WebDavFormDialog(),
+  );
+  if (result == null || result.url.trim().isEmpty) return;
+  try {
+    await ref
+        .read(webDavSourcesProvider.notifier)
+        .upsert(
+          name: result.name,
+          url: result.url,
+          username: result.username,
+          password: result.password,
+          root: result.root,
+          autoSync: result.autoSync,
+        );
+    await ref.read(webDavLibraryProvider.notifier).refresh();
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('WebDAV 已保存并加入音乐库同步')));
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('保存 WebDAV 失败：$error')));
+  }
+}
+
+class _WebDavFormResult {
+  const _WebDavFormResult({
+    required this.name,
+    required this.url,
+    required this.username,
+    required this.password,
+    required this.root,
+    required this.autoSync,
+  });
+
+  final String name;
+  final String url;
+  final String username;
+  final String password;
+  final String root;
+  final bool autoSync;
+}
+
+class _WebDavFormDialog extends StatefulWidget {
+  const _WebDavFormDialog();
+
+  @override
+  State<_WebDavFormDialog> createState() => _WebDavFormDialogState();
+}
+
+class _WebDavFormDialogState extends State<_WebDavFormDialog> {
+  final TextEditingController _name = TextEditingController();
+  final TextEditingController _url = TextEditingController();
+  final TextEditingController _username = TextEditingController();
+  final TextEditingController _password = TextEditingController();
+  final TextEditingController _root = TextEditingController(text: '/');
+  bool _autoSync = true;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _url.dispose();
+    _username.dispose();
+    _password.dispose();
+    _root.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('添加 WebDAV 网盘'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            TextField(
+              controller: _name,
+              decoration: const InputDecoration(labelText: '名称（可选）'),
+            ),
+            TextField(
+              controller: _url,
+              keyboardType: TextInputType.url,
+              decoration: const InputDecoration(
+                labelText: '服务器地址',
+                hintText: 'https://example.com/webdav',
+              ),
+            ),
+            TextField(
+              controller: _username,
+              decoration: const InputDecoration(labelText: '账号'),
+            ),
+            TextField(
+              controller: _password,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: '应用密码'),
+            ),
+            TextField(
+              controller: _root,
+              decoration: const InputDecoration(labelText: '同步目录'),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('启动时自动同步'),
+              value: _autoSync,
+              onChanged: (bool value) => setState(() => _autoSync = value),
+            ),
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            _WebDavFormResult(
+              name: _name.text,
+              url: _url.text,
+              username: _username.text,
+              password: _password.text,
+              root: _root.text,
+              autoSync: _autoSync,
+            ),
+          ),
+          child: const Text('保存'),
+        ),
       ],
     );
   }

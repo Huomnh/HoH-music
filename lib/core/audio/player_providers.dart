@@ -148,14 +148,7 @@ class PlayerController extends Notifier<PlayerUiState> {
           final bool trackChanged = p.index != state.currentIndex;
           state = state.copyWith(currentIndex: p.index, completed: false);
 
-          // 换歌了 → 把"等下一首生效"的播放模式落下去。
-          // 这时用户本来就会看到曲目信息变化，不算"点按钮把歌换掉了"。
-          final PlaybackMode? pending = _pendingMode;
-          if (trackChanged && pending != null) {
-            _pendingMode = null;
-            _applyModeToEngine(pending);
-            _logger('播放模式「${pending.label}」已生效');
-          }
+          if (trackChanged) _logger('播放列表切换到第 ${p.index + 1} 首');
         }),
         _engine.completedStream.listen((bool done) {
           state = state.copyWith(completed: done);
@@ -241,14 +234,6 @@ class PlayerController extends Notifier<PlayerUiState> {
     );
   }
 
-  /// 待生效的播放模式。
-  ///
-  /// ⚠️ **点模式按钮不立刻改引擎**（0.0.16 的行为）：
-  /// `setShuffle` 会重排播放列表、把"正在播放的那首"换掉，
-  /// 用户点了按钮却发现歌变了。所以这里只记下意图，
-  /// 等**下一首真正开始**（或本来就没在播）时才应用。
-  PlaybackMode? _pendingMode;
-
   /// 设置播放模式。
   ///
   /// [persist] 为 false 时只改状态（启动恢复用）。
@@ -257,16 +242,12 @@ class PlayerController extends Notifier<PlayerUiState> {
     state = state.copyWith(mode: mode);
     if (persist && changed) unawaited(PlaybackPrefs.saveMode(mode));
 
-    if (state.currentTrack == null) {
-      // 没在播 → 立即生效
+    // 播放模式只改变下一首的选择规则和循环策略，不会重排底层 Playlist，
+    // 因而可以立即生效，也不会再出现“按钮已经切换但下一首仍按旧顺序”的
+    // 情况。待解析在线歌单由 pool_playback.dart 额外消费同一状态。
+    if (changed || state.currentTrack == null) {
       _applyModeToEngine(mode);
-      _pendingMode = null;
-      return;
-    }
-
-    if (changed) {
-      _pendingMode = mode;
-      _logger('播放模式已切换为「${mode.label}」，将在下一首生效');
+      _logger('播放模式已切换为「${mode.label}」');
     }
   }
 
@@ -298,8 +279,9 @@ class PlayerController extends Notifier<PlayerUiState> {
           // 用**引擎自管的随机顺序**（0.0.41）：不用 media_kit 的 setShuffle，
           // 它会把内部播放列表重排，导致"随机模式下点歌点不对"。
           unawaited(_engine.setShuffleMode(true));
-          // 随机 + 列表循环：最符合"随机播放"的直觉
-          unawaited(_engine.setReplayMode(PlaybackMode.repeatAll));
+          // 结束事件交给平台页面的完成监听推进随机索引，不能让 media_kit
+          // 先按原列表顺序自动跳下一首。
+          unawaited(_engine.setReplayMode(PlaybackMode.sequential));
       }
     } catch (error) {
       _logger('应用播放模式失败：$error');
