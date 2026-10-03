@@ -25,6 +25,7 @@ analyzer:
     - "**/macos/**"
     - "**/linux/**"
     - windows/**
+    - android/**
 
 linter:
   rules:

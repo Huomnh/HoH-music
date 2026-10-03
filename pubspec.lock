@@ -109,10 +109,10 @@ packages:
     dependency: transitive
     description:
       name: built_collection
-      sha256: "376e3dd27b51ea877c28d525560790aee2e6fbb5f20e2f85d5081027d94e2100"
+      sha256: "44922ecebd8e3d0cef743dadd3b54df4e87e2a4c52a29465a1872aa9e192caa8"
       url: "https://pub.dev"
     source: hosted
-    version: "5.1.1"
+    version: "5.1.2"
   built_value:
     dependency: transitive
     description:
@@ -157,10 +157,10 @@ packages:
     dependency: transitive
     description:
       name: cli_util
-      sha256: "71e43f1976c3eae2d9468a5b4d6600bf8cae61508b87f27fa1799228935d48ab"
+      sha256: "89b8801ba49f8b593fbf2d3e59efd0f566c46cd4ba6837ae2610c72b52a0f899"
       url: "https://pub.dev"
     source: hosted
-    version: "0.5.2"
+    version: "0.6.0"
   clock:
     dependency: transitive
     description:
@@ -229,10 +229,10 @@ packages:
     dependency: transitive
     description:
       name: dbus
-      sha256: a48d5da28e89bd02196e80d81ed8d7954923d00a0f4a68cc20b575038f023383
+      sha256: f7db8504e715b835f5ebe5fe74604ccd961d504c73389a5d8e81bafc2e2f3612
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.15"
+    version: "0.8.0"
   dio:
     dependency: "direct main"
     description:
@@ -253,18 +253,18 @@ packages:
     dependency: "direct main"
     description:
       name: drift
-      sha256: e3b6352aa02e60bed6ffc3cc9894c421578dad5fbef21b1f7f57cdc0e4edabcb
+      sha256: a21a6a7a9e6a0bcabdf47a9af4247c556d38dc9bfe9f05c4fdf72a488bb57eab
       url: "https://pub.dev"
     source: hosted
-    version: "2.35.0"
+    version: "2.35.1"
   drift_dev:
     dependency: "direct dev"
     description:
       name: drift_dev
-      sha256: fbad5c1e3a73820cdb1f32161eb2f40bb5e5f03c0c1a3d236595725aec7efc6d
+      sha256: e0d16aaa21f3408cbe2dd4bfc56c36cea43e53a537e6613b91380c0924b3bd30
       url: "https://pub.dev"
     source: hosted
-    version: "2.35.0"
+    version: "2.35.1"
   drift_flutter:
     dependency: "direct main"
     description:
@@ -333,10 +333,10 @@ packages:
     dependency: transitive
     description:
       name: file_picker_linux
-      sha256: e7db600f50672ce5ebbe422ac0906e0f3d2a476188cc93e7126afee12bf08063
+      sha256: "9c870771500c758eb46506c98532c3ee60e6e51d0a62dcde24a849ef213ea5ce"
       url: "https://pub.dev"
     source: hosted
-    version: "2.0.0"
+    version: "2.0.1"
   file_picker_platform_interface:
     dependency: transitive
     description:
@@ -548,10 +548,10 @@ packages:
     dependency: transitive
     description:
       name: jni
-      sha256: f038e58b4dc2c9037f50e233175086337e0b305e356d28211bf55f21c504cbd3
+      sha256: "6b9ca0602fef0230e83149afbe3f9f8227e94f2bbe84a1da4f14d699742f402d"
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.3"
+    version: "1.1.0"
   jni_flutter:
     dependency: transitive
     description:
@@ -1201,10 +1201,10 @@ packages:
     dependency: "direct main"
     description:
       name: url_launcher
-      sha256: f6a7e5c4835bb4e3026a04793a4199ca2d14c739ec378fdfe23fc8075d0439f8
+      sha256: e8cc955c97e06df9879140a1fe301f3d493f01b7c62dec7f46834be31d7e9fda
       url: "https://pub.dev"
     source: hosted
-    version: "6.3.2"
+    version: "6.3.3"
   url_launcher_android:
     dependency: transitive
     description:

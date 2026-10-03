@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'features/library/library_store.dart';
+import 'features/mobile/mobile_app_shell.dart';
 import 'features/player/player_page.dart';
 import 'features/player/optional_update_prompt.dart';
 import 'platforms/windows/debug_autoplay.dart';
@@ -49,7 +50,11 @@ class HoHMusicApp extends ConsumerWidget {
         ref.watch(customFontsProvider).value ?? const CustomFontSettings();
     // 强调色跟随背景（自定义图片会从图里取色）
     final AppAccent accent = ref.watch(accentProvider);
-    Widget home = const PlayerPage();
+    // Android 使用独立的移动端信息架构：底部导航、单列页面和全屏播放页。
+    // Windows 继续使用桌面侧栏，不把桌面布局强行缩到手机屏幕。
+    Widget home = !kIsWeb && Platform.isAndroid
+        ? const MobileAppShell()
+        : const PlayerPage();
 
     // 启动恢复：按「启动行为」决定是否载入扫描记录并播放
     home = LibraryBootstrap(child: home);

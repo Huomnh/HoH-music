@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -47,6 +48,10 @@ class _VersionInfoViewState extends State<VersionInfoView> {
   @override
   Widget build(BuildContext context) {
     final AppAccent accent = AppAccent.of(context);
+    final bool isAndroid = defaultTargetPlatform == TargetPlatform.android;
+    final String currentVersion = isAndroid
+        ? AppConstants.androidVersion
+        : AppConstants.version;
     return GlassPanel(
       borderRadius: BorderRadius.circular(16),
       padding: const EdgeInsets.fromLTRB(28, 20, 28, 20),
@@ -90,14 +95,16 @@ class _VersionInfoViewState extends State<VersionInfoView> {
                     ),
                     const Spacer(),
                     Text(
-                      'v${AppConstants.version}',
+                      'v$currentVersion',
                       style: TextStyle(color: accent.primary, fontSize: 12),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  '当前为 Windows 0.1.0 稳定版。Bug、功能建议和版本更新将在 GitHub 仓库中维护。',
+                Text(
+                  isAndroid
+                      ? '当前为 Android 0.0.1 移动端预览版。Bug、功能建议和版本更新将在 GitHub 仓库中维护。'
+                      : '当前为 Windows 0.1.0 稳定版。Bug、功能建议和版本更新将在 GitHub 仓库中维护。',
                   style: TextStyle(
                     color: AppColors.textTertiary,
                     fontSize: 12,
