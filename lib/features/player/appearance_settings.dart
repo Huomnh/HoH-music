@@ -42,8 +42,8 @@ class AppearanceSettingsView extends ConsumerWidget {
   const AppearanceSettingsView({super.key});
 
   /// 与播放面板一致的小标题样式（「正在播放」用的就是这套）。
-  static const TextStyle _sectionLabel = TextStyle(
-    color: Color(0x8CFFFFFF),
+  static TextStyle _sectionLabel(Color color) => TextStyle(
+    color: color,
     fontSize: 10,
     fontWeight: FontWeight.w600,
     letterSpacing: 2.2,
@@ -77,7 +77,7 @@ class AppearanceSettingsView extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            const Text('外观设置', style: _sectionLabel),
+            Text('外观设置', style: _sectionLabel(accent.uiMutedText)),
             const SizedBox(height: 8),
             Text(
               '背景、主题和播放页布局可以随时调整；界面动画会按你的选择生效。',
@@ -678,7 +678,7 @@ class _BackgroundTile extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: _selected ? FontWeight.w600 : FontWeight.w400,
-                color: _selected ? Colors.white : const Color(0xBFFFFFFF),
+                color: _selected ? accent.uiText : accent.uiMutedText,
               ),
             ),
             Text(
@@ -717,14 +717,14 @@ class _CustomPlaceholder extends StatelessWidget {
           Icon(
             Icons.add_photo_alternate_outlined,
             size: 22,
-            color: Colors.white.withValues(alpha: 0.72),
+            color: AppAccent.of(context).uiText.withValues(alpha: 0.72),
           ),
           const SizedBox(height: 4),
           Text(
             '添加图片',
             style: TextStyle(
               fontSize: 10.5,
-              color: Colors.white.withValues(alpha: 0.66),
+              color: AppAccent.of(context).uiMutedText,
             ),
           ),
         ],
@@ -1091,8 +1091,8 @@ class _ChoiceRow<T> extends StatelessWidget {
       children: <Widget>[
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: accent.uiText,
             fontSize: 12.5,
             fontWeight: FontWeight.w600,
           ),
@@ -1136,18 +1136,18 @@ class _PillButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             color: selected
                 ? accent.primary.withValues(alpha: 0.18)
-                : Colors.black.withValues(alpha: 0.22),
+                : accent.uiPanelFill,
             border: Border.all(
               color: selected
                   ? accent.primary.withValues(alpha: 0.75)
-                  : Colors.white.withValues(alpha: 0.12),
+                  : accent.uiBorder,
             ),
           ),
           child: Text(
             label,
             style: TextStyle(
               fontSize: 11.5,
-              color: selected ? accent.primary : const Color(0xBFFFFFFF),
+              color: selected ? accent.primary : accent.uiMutedText,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
@@ -1235,15 +1235,12 @@ class _RgbColorWheel extends StatelessWidget {
             children: <Widget>[
               Text(
                 selected == null ? '跟随背景主题' : '自定义 RGB 主题色',
-                style: const TextStyle(color: Colors.white, fontSize: 12),
+                style: TextStyle(color: accent.uiText, fontSize: 12),
               ),
               const SizedBox(height: 4),
               Text(
                 '#${current.toARGB32().toRadixString(16).substring(2).toUpperCase()}',
-                style: const TextStyle(
-                  color: AppColors.textTertiary,
-                  fontSize: 11,
-                ),
+                style: TextStyle(color: AppColors.textTertiary, fontSize: 11),
               ),
               const Text(
                 '外圈色相 · 内部饱和度/明度（支持黑、白、灰）',
@@ -1429,8 +1426,8 @@ class _SliderRow extends StatelessWidget {
             children: <Widget>[
               Text(
                 label,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: accent.uiText,
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1496,8 +1493,8 @@ class _SwitchRow extends StatelessWidget {
               children: <Widget>[
                 Text(
                   label,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: accent.uiText,
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
                   ),

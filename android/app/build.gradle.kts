@@ -25,9 +25,9 @@ android {
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
         // flag during build.
-        // Android 端从 0.0.1 独立起算；Windows 正式版本仍由桌面发布流程维护。
-        versionCode = 1
-        versionName = "0.0.1"
+        // Android 与共享产品版本保持一致；GitHub tag/release 通过平台前缀区分。
+        versionCode = 2
+        versionName = "0.1.0"
     }
 
     buildTypes {

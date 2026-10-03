@@ -22,11 +22,11 @@ abstract final class AppConstants {
   /// 版本编号规则见 `docs/版本控制规范.md` 第三节：从 0.0.1 起算。
   static const String version = '0.1.0';
 
-  /// Android 首个移动端预览版本号。
+  /// Android 当前正式版本号。
   ///
-  /// Android runner 在 Gradle 中独立使用此版本，避免改变已经发布的
-  /// Windows 0.1.0 版本标识。
-  static const String androidVersion = '0.0.1';
+  /// Android runner 在 Gradle 中与共享产品版本保持一致；GitHub Release
+  /// 使用平台前缀区分 Android、Windows 等不同端的下载资产。
+  static const String androidVersion = '0.1.0';
 
   /// GitHub 仓库地址。仓库创建后填写，发布包和版本说明页共用此值。
   static const String repositoryUrl = 'https://github.com/Huomnh/HoH-music';

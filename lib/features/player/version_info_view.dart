@@ -109,7 +109,7 @@ class _VersionInfoViewState extends State<VersionInfoView> {
                 const SizedBox(height: 12),
                 Text(
                   isAndroid
-                      ? '当前为 Android 0.0.1 移动端预览版。Bug、功能建议和版本更新将在 GitHub 仓库中维护。'
+                      ? '当前为 Android 0.1.0 正式版。Bug、功能建议和版本更新将在 GitHub 仓库中维护。'
                       : '当前为 Windows 0.1.0 稳定版。Bug、功能建议和版本更新将在 GitHub 仓库中维护。',
                   style: TextStyle(
                     color: accent.mutedForeground,

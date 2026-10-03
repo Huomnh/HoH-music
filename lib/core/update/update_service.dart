@@ -45,7 +45,7 @@ class AppUpdate {
 ///
 /// 发布约定：Release 至少上传一个包含 `windows-x64` 和 `.exe` 的安装包，
 /// 例如 `HoH-music-Setup-0.1.1-Windows-x64.exe`。版本号从 tag 读取，支持
-/// `v0.1.1`、`0.1.1`、`0.1.1-beta.2`，不把 build metadata 当作产品版本。
+/// `v0.1.1`、`windows-v0.1.1`、`0.1.1-beta.2`，不把 build metadata 当作产品版本。
 class UpdateService {
   UpdateService({Dio? client}) : _client = client ?? Dio();
 
@@ -156,7 +156,7 @@ class UpdateService {
 
   static String? _normalizeVersion(String input) {
     final RegExpMatch? match = RegExp(
-      r'^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?',
+      r'^(?:(?:android|windows|macos|ios|linux)-)?v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?',
     ).firstMatch(input.trim());
     if (match == null) return null;
     final String suffix = match.group(4) == null ? '' : '-${match.group(4)}';

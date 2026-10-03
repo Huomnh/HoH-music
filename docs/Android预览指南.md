@@ -1,8 +1,8 @@
-# Android 端预览指南
+# Android 构建与发布指南
 
 ## 当前状态
 
-Android runner 已加入仓库，移动端 UI 版本从 `0.0.1` 起算。当前实现包含：
+Android runner 已加入仓库，当前正式版本为 `0.1.0`。当前实现包含：
 
 - 底部导航：首页、发现、我的、设置；
 - 首页当前歌曲卡片和快捷入口；
@@ -23,8 +23,9 @@ Android runner 已加入仓库，移动端 UI 版本从 `0.0.1` 起算。当前�
 - 本地、在线和导入歌单都会完整解析后一次性建立播放队列，Android 与 Windows 使用相同的下一首/上一首和播放顺序语义，不再逐首临时接管队列；在线音源地址并行解析，歌词只优先准备当前歌曲，减少歌单首曲等待。
 - 普通自建/导入歌单支持左滑显示垃圾桶，确认后删除歌单记录；“我喜欢的音乐”和“所有歌曲”不可删除，歌曲文件不会被删除。
 - 音源管理页的音乐库下方新增 WebDAV 连接列表、添加网盘和全部同步入口；脚本导入操作区在窄屏下自动换行。
+- 白墨极简设置页使用墨色/灰色高对比文字；Android 锁屏封面按歌曲 ID 和请求版本同步，网络延迟或快速切歌时不会让旧封面覆盖新歌曲，切歌期间先清除系统媒体卡片旧图。
 
-当前已成功构建 Debug APK：`build/app/outputs/flutter-apk/app-debug.apk`。本轮补充黑白平面主题、三句首页歌词、歌曲进度条、Android 15 MediaSession 封面/控制、当前歌词 `DISPLAY_DESCRIPTION` 兼容传递、与主程序一致的爱心喜欢联动、通知展开区封面/歌词和窄屏溢出修复；首页 Slider 统一使用毫秒范围，拖动中跟手、松手后提交 seek。普通 Android 主题仍使用低强度原生 `BackdropFilter`、实体染色和圆角边框，墨白/白墨主题则完全关闭玻璃与渐变，并使用克制的彩色强调控件；白墨主题底部导航为白底黑色选中框。暖霞流光和墨潮折影已移除，旧配置会回退到液态流光；外观设置页不再提供液态玻璃参数，同时保留播放时的 Android 前台媒体服务保活。通知展开区按左侧专辑封面、右侧单行跑马歌词/歌曲信息/播放按钮、中部进度与时间、底部上一首/下一首/爱心控制区排列；Android 15 系统媒体卡片由 SystemUI 排版，三句滚动歌词以及 `DISPLAY_DESCRIPTION` 是否显示/滚动均由系统或厂商决定。当前 APK 为 270,374,768 bytes / 257.85 MiB，SHA-256 为 `923F54D650332846B47047B92803BA05231D3581106AB2F6B6FDD2F45937FFAB`。上一轮曾在 `emulator-5554` 安装启动验证；本轮当前 shell 未提供 `adb`，未重新安装，触控、播放、通知权限、音频焦点和不同厂商锁屏行为仍建议由用户在 Android 15 模拟器/真机验收。
+当前已成功构建 Android 0.1.0 Release APK：`build/app/outputs/flutter-apk/HoH-music-0.1.0-Android-universal.apk`。本轮同步完成 Android 版本号、平台 Release 命名工作流、白墨设置页高对比文字和 MediaSession 封面竞态保护：切歌时清除旧封面，封面网络请求按歌曲 ID/请求版本校验后再刷新，避免延迟结果覆盖新歌；此前已补充黑白平面主题、三句首页歌词、歌曲进度条、Android 15 MediaSession 封面/控制、当前歌词 `DISPLAY_DESCRIPTION` 兼容传递、与主程序一致的爱心喜欢联动、通知展开区封面/歌词和窄屏溢出修复。普通 Android 主题仍使用低强度原生 `BackdropFilter`、实体染色和圆角边框，墨白/白墨主题则完全关闭玻璃与渐变，并使用克制的彩色强调控件；白墨主题底部导航为白底黑色选中框。暖霞流光和墨潮折影已移除，旧配置会回退到液态流光；外观设置页不再提供液态玻璃参数，同时保留播放时的 Android 前台媒体服务保活。通知展开区按左侧专辑封面、右侧单行跑马歌词/歌曲信息/播放按钮、中部进度与时间、底部上一首/下一首/爱心控制区排列；Android 15 系统媒体卡片由 SystemUI 排版，三句滚动歌词以及 `DISPLAY_DESCRIPTION` 是否显示/滚动均由系统或厂商决定。APK 为 121,243,981 bytes / 115.63 MiB，SHA-256 为 `EA339656890B931A61FCF90F0F0D464F9CA03205C3AB0544B09E8290DFB47313`。当前 shell 未提供 `adb`，未安装 Android 15 模拟器/真机；触控、播放、通知权限、音频焦点、网络延迟切歌、生产签名和不同厂商锁屏行为仍建议由用户在 Android 15 模拟器/真机验收。
 
 歌单链接导入和新建歌单弹窗由各自的 Stateful dialog 管理输入 controller，避免弹窗退出动画尚未结束就释放 controller 导致 Flutter debug 红屏；网易云公开链接（包括带 `playlist?id=` 的链接）仍只读取歌单元数据，实际播放地址由音源重新解析。
 
@@ -46,7 +47,7 @@ flutter doctor
 flutter devices
 ```
 
-## Debug 构建
+## Release 构建
 
 在仓库根目录执行：
 
@@ -54,13 +55,13 @@ flutter devices
 flutter pub get
 flutter analyze --no-pub
 flutter test --reporter compact
-flutter build apk --debug
+flutter build apk --release
 ```
 
 APK 默认输出到：
 
 ```text
-build/app/outputs/flutter-apk/app-debug.apk
+build/app/outputs/flutter-apk/app-release.apk
 ```
 
 连接实体设备或启动模拟器后，也可以直接运行：
@@ -73,17 +74,17 @@ flutter run -d <设备 ID>
 
 Android 的 Gradle runner 当前固定为：
 
-- `versionName = 0.0.1`；
-- `versionCode = 1`。
+- `versionName = 0.1.0`；
+- `versionCode = 2`。
 
-Windows 仍使用独立的 `0.1.0` 正式版发布流程。后续 Android 发布时只递增 Android runner 的版本号与版本代码，并在本文件、README 和交接文档同步记录。
+Windows 与 Android 使用相同的产品版本号，但通过 GitHub 标签和 Release 名称区分平台：Android 使用 `android-v0.1.0` / `HoH music Android v0.1.0`，Windows 使用 `windows-v0.1.0` / `HoH music Windows v0.1.0`。后续 Android 发布时递增版本号和 versionCode，并上传 `HoH-music-<版本号>-Android-universal.apk`。
 
 ## 当前限制
 
-- 当前已完成移动端 UI 壳层、APK 工程接入和基础前台播放保活，尚未完成 Android 实机长时间播放验收；
+- 当前已完成移动端 UI 壳层、Release APK 工程接入和基础前台播放保活，尚未完成 Android 实机长时间播放验收；
 - Android 逐字歌词采用当前句及相邻句、80ms 量化位置的轻量渲染；歌词源没有逐词时间戳时按行时间区间估算，暂不宣称与桌面视觉模式完全一致；
 - Android 普通主题的 `GlassPanel` 使用低强度原生 `BackdropFilter`、实体染色和圆角边框，默认 sigma 约为 6；关闭玻璃时不创建模糊层，不采样折射位移。墨白/白墨主题进一步关闭模糊、折射、渐变和扫光，使用单色平面面板与高对比文字；外观设置页不再开放液态玻璃参数；Windows 的桌面插件路径保持独立。不调用任何厂商私有液态玻璃 API。
 - 已加入 `HoHPlaybackService` 媒体前台服务和 Android `MediaSession` 桥接；锁屏/通知栏可显示歌曲元数据、封面、进度和播放控制，并将播放暂停、上一首、下一首、seek、加入喜欢回传 Flutter；当前歌词句写入 `METADATA_KEY_DISPLAY_DESCRIPTION`，歌手保留在 `DISPLAY_SUBTITLE`/`ARTIST`，是否显示由系统媒体面板决定。音频焦点、耳机按键在不同厂商系统上的兼容、通知权限和后台限制仍需 Android 专项适配；标准 Android 锁屏没有统一的滚动歌词展示协议，完整歌词继续由应用播放页显示；
 - Android 文件访问权限、下载目录选择和音源脚本导入需要在真实设备上逐项验收；
-- 本机若没有 Android SDK，`flutter build apk` 会在构建前直接失败，这是环境限制，不代表 Dart/Flutter 静态分析失败。
+- 本机若没有 Android SDK，`flutter build apk` 会在构建前直接失败，这是环境限制，不代表 Dart/Flutter 静态分析失败；正式长期分发前应把 Gradle 当前的 debug signing fallback 换成受保护的生产 keystore。
 - 如果项目目录与 Pub 缓存位于不同磁盘，`android/gradle.properties` 已关闭 Kotlin 增量编译，并将旧版 `flutter_js` 的 JVM 目标差异降为 warning，以保证 APK 可以稳定构建；首次构建会自动下载 NDK、CMake 和 `media_kit` 播放库，耗时可能较长。

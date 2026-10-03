@@ -1,0 +1,88 @@
+name: Platform release naming
+
+on:
+  push:
+    tags:
+      - 'android-v*'
+      - 'windows-v*'
+      - 'macos-v*'
+      - 'ios-v*'
+      - 'linux-v*'
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform identifier used in the tag and release title
+        required: true
+        type: choice
+        options:
+          - android
+          - windows
+          - macos
+          - ios
+          - linux
+      version:
+        description: Semantic product version, for example 0.1.1
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve platform release identity
+        id: meta
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_PLATFORM: ${{ inputs.platform }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            platform="$INPUT_PLATFORM"
+            version="$INPUT_VERSION"
+            tag="${platform}-v${version}"
+          else
+            tag="$REF_NAME"
+            platform="${tag%%-v*}"
+            version="${tag#*-v}"
+          fi
+
+          case "$platform" in
+            android) display="Android" ;;
+            windows) display="Windows" ;;
+            macos) display="macOS" ;;
+            ios) display="iOS" ;;
+            linux) display="Linux" ;;
+            *) echo "Unsupported platform: $platform" >&2; exit 1 ;;
+          esac
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid semantic version: $version" >&2
+            exit 1
+          fi
+
+          {
+            echo "platform=$platform"
+            echo "display=$display"
+            echo "version=$version"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create or update platform-specific release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: HoH music ${{ steps.meta.outputs.display }} v${{ steps.meta.outputs.version }}
+          body: |
+            HoH music ${{ steps.meta.outputs.display }} v${{ steps.meta.outputs.version }}
+
+            This release is scoped to the `${{ steps.meta.outputs.platform }}` platform.
+            Download assets whose filenames include the platform and architecture.
+          generate_release_notes: true
+          draft: false
+          prerelease: false

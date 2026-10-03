@@ -78,6 +78,25 @@ class AppAccent {
   Color get navigationSurface =>
       isLightMonochrome ? const Color(0xFFFFFFFF) : const Color(0xFF0D0D0D);
 
+  /// 正文、控件和次要说明在设置页使用的语义色。
+  /// 深色主题继续沿用原来的白色层级；浅色黑白主题则统一切换成
+  /// 墨色/灰色，避免固定白字落在白色面板上失去辨识度。
+  Color get uiText => isLightMonochrome ? foreground : Colors.white;
+
+  Color get uiMutedText =>
+      isLightMonochrome ? mutedForeground : const Color(0xB3FFFFFF);
+
+  Color get uiDisabledText =>
+      isLightMonochrome ? const Color(0xFF8A98A3) : const Color(0x99FFFFFF);
+
+  Color get uiPanelFill => isLightMonochrome
+      ? const Color(0xFFE9EEF2)
+      : Colors.black.withValues(alpha: 0.22);
+
+  Color get uiBorder => isLightMonochrome
+      ? const Color(0x553D5E78)
+      : Colors.white.withValues(alpha: 0.16);
+
   List<Color> get sceneColors => <Color>[
     scenePrimary ?? primary,
     sceneSecondary ?? secondary,

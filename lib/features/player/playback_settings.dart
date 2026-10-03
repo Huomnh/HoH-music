@@ -24,8 +24,8 @@ import '../library/library_store.dart';
 class PlaybackSettingsView extends ConsumerWidget {
   const PlaybackSettingsView({super.key});
 
-  static const TextStyle _sectionLabel = TextStyle(
-    color: Color(0x8CFFFFFF),
+  static TextStyle _sectionLabel(Color color) => TextStyle(
+    color: color,
     fontSize: 10,
     fontWeight: FontWeight.w600,
     letterSpacing: 2.2,
@@ -46,7 +46,7 @@ class PlaybackSettingsView extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            const Text('播放设置', style: _sectionLabel),
+            Text('播放设置', style: _sectionLabel(accent.uiMutedText)),
             const SizedBox(height: 8),
             const Text(
               '管理启动行为、快捷键和封面显示来源。',
@@ -163,7 +163,9 @@ class AudioOutputSection extends ConsumerWidget {
               value: value,
               hint: Text(_label(selected)),
               icon: Icon(Icons.expand_more_rounded, color: accent.primary),
-              dropdownColor: const Color(0xFF20263B),
+              dropdownColor: accent.isLightMonochrome
+                  ? accent.panelSurface
+                  : const Color(0xFF20263B),
               items: <DropdownMenuItem<AudioDevice>>[
                 for (final AudioDevice device in devices)
                   DropdownMenuItem<AudioDevice>(
@@ -171,7 +173,7 @@ class AudioOutputSection extends ConsumerWidget {
                     child: Text(
                       _label(device),
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                      style: TextStyle(color: accent.uiText, fontSize: 12),
                     ),
                   ),
               ],
@@ -221,10 +223,10 @@ class HotkeySettingsSection extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
-                  const Text(
+                  Text(
                     '启用全局快捷键',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: accent.uiText,
                       fontSize: 12.5,
                       fontWeight: FontWeight.w600,
                     ),
@@ -307,7 +309,7 @@ class _HotkeyChip extends StatelessWidget {
             opacity: dimmed ? 0.45 : 1,
             child: Text(
               spec.label,
-              style: const TextStyle(color: Colors.white, fontSize: 11.5),
+              style: TextStyle(color: accent.uiText, fontSize: 11.5),
             ),
           ),
           const SizedBox(width: 8),
@@ -410,15 +412,16 @@ class _ScraperSourceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppAccent accent = AppAccent.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         Row(
           children: <Widget>[
-            const Text(
+            Text(
               '刮削源',
               style: TextStyle(
-                color: Colors.white,
+                color: accent.uiText,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
               ),
@@ -554,7 +557,7 @@ class _ChoiceCard extends StatelessWidget {
                     Text(
                       title,
                       style: TextStyle(
-                        color: Colors.white,
+                        color: accent.uiText,
                         fontSize: 12.5,
                         fontWeight: selected
                             ? FontWeight.w600

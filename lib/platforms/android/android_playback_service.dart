@@ -28,6 +28,8 @@ abstract final class AndroidPlaybackService {
   );
   static bool _running = false;
   static DateTime _lastPositionSync = DateTime.fromMillisecondsSinceEpoch(0);
+  static String? _activeTrackId;
+  static int _trackRevision = 0;
 
   /// 接收 Android 锁屏/通知栏发回来的媒体操作。
   static void installMediaActionHandler(
@@ -55,12 +57,15 @@ abstract final class AndroidPlaybackService {
     Uint8List? artwork,
     bool? favorite,
     String? lyric,
+    String? artworkTrackId,
   }) async {
     if (!Platform.isAndroid) return;
     final Track? track = state.currentTrack;
     if (track == null) {
       if (!_running) return;
       _running = false;
+      _activeTrackId = null;
+      _trackRevision++;
       try {
         await _channel.invokeMethod<void>('stop');
       } on PlatformException catch (error) {
@@ -68,6 +73,12 @@ abstract final class AndroidPlaybackService {
       }
       return;
     }
+
+    if (_activeTrackId != track.id) {
+      _activeTrackId = track.id;
+      _trackRevision++;
+    }
+    final int requestRevision = _trackRevision;
 
     // 锁屏进度不需要跟 Flutter 页面一样高频刷新；降低 MethodChannel、
     // Android 通知和前台服务更新频率，避免后台耗电和频繁唤醒。
@@ -84,6 +95,14 @@ abstract final class AndroidPlaybackService {
       final Uint8List? compactArtwork = artwork == null
           ? null
           : await _prepareArtwork(artwork);
+      // 封面压缩是异步的。歌曲切换后，旧请求可能晚于新歌曲返回；
+      // 丢弃这类结果，避免系统锁屏卡片被旧封面覆盖。
+      if (artwork != null &&
+          (_activeTrackId != track.id ||
+              requestRevision != _trackRevision ||
+              (artworkTrackId != null && artworkTrackId != track.id))) {
+        return;
+      }
       await _channel.invokeMethod<void>('update', <String, Object?>{
         'title': track.title,
         'artist': track.artist,
@@ -140,6 +159,8 @@ class AndroidPlaybackHost extends ConsumerStatefulWidget {
 }
 
 class _AndroidPlaybackHostState extends ConsumerState<AndroidPlaybackHost> {
+  int _artworkRequestId = 0;
+
   String _currentLyric(Duration? position) {
     final Lyrics? lyrics = ref.read(currentLyricsProvider).value;
     if (lyrics == null || lyrics.isEmpty) return '';
@@ -151,6 +172,51 @@ class _AndroidPlaybackHostState extends ConsumerState<AndroidPlaybackHost> {
   bool _currentFavorite(PlayerUiState state) {
     final Track? track = state.currentTrack;
     return track != null && ref.read(isFavoriteProvider(track.id));
+  }
+
+  /// 以当前歌曲为快照加载封面，并在结果返回后再次确认歌曲没有变化。
+  ///
+  /// `currentCoverProvider` 本身会受到网络请求延迟影响，所以不能把监听
+  /// 回调里拿到的字节直接认为仍属于当前歌曲。切歌时先发空封面清除原生
+  /// MediaSession 的旧图，加载完成后再发新图。
+  Future<void> _refreshArtworkForCurrentTrack() async {
+    final PlayerUiState initial = ref.read(playerControllerProvider);
+    final Track? track = initial.currentTrack;
+    if (track == null) return;
+    final String trackId = track.id;
+    final int requestId = ++_artworkRequestId;
+    final Duration? position = ref.read(playbackPositionProvider).value;
+
+    await AndroidPlaybackService.sync(
+      initial,
+      position: position,
+      artwork: Uint8List(0),
+      artworkTrackId: trackId,
+      favorite: _currentFavorite(initial),
+      lyric: _currentLyric(position),
+    );
+
+    Uint8List? bytes;
+    try {
+      bytes = await ref.read(currentCoverProvider.future);
+    } catch (error) {
+      debugPrint('[AndroidPlayback] 获取封面失败，保留空封面：$error');
+    }
+    if (!mounted ||
+        requestId != _artworkRequestId ||
+        ref.read(playerControllerProvider).currentTrack?.id != trackId) {
+      return;
+    }
+    final PlayerUiState state = ref.read(playerControllerProvider);
+    final Duration? currentPosition = ref.read(playbackPositionProvider).value;
+    await AndroidPlaybackService.sync(
+      state,
+      position: currentPosition,
+      artwork: bytes ?? Uint8List(0),
+      artworkTrackId: trackId,
+      favorite: _currentFavorite(state),
+      lyric: _currentLyric(currentPosition),
+    );
   }
 
   @override
@@ -184,24 +250,21 @@ class _AndroidPlaybackHostState extends ConsumerState<AndroidPlaybackHost> {
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      unawaited(
-        AndroidPlaybackService.sync(
-          ref.read(playerControllerProvider),
-          position: ref.read(playbackPositionProvider).value,
-          artwork: ref.read(currentCoverProvider).value ?? Uint8List(0),
-          favorite: _currentFavorite(ref.read(playerControllerProvider)),
-          lyric: _currentLyric(ref.read(playbackPositionProvider).value),
-        ),
-      );
+      unawaited(_refreshArtworkForCurrentTrack());
     });
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen<PlayerUiState>(playerControllerProvider, (
-      _,
+      PlayerUiState? previous,
       PlayerUiState next,
     ) {
+      final bool trackChanged =
+          previous?.currentTrack?.id != next.currentTrack?.id;
+      if (trackChanged && next.currentTrack != null) {
+        unawaited(_refreshArtworkForCurrentTrack());
+      }
       final Duration? position = ref.read(playbackPositionProvider).value;
       unawaited(
         AndroidPlaybackService.sync(
@@ -221,16 +284,10 @@ class _AndroidPlaybackHostState extends ConsumerState<AndroidPlaybackHost> {
         ),
       );
     });
-    ref.listen<AsyncValue<Uint8List?>>(currentCoverProvider, (_, next) {
-      unawaited(
-        AndroidPlaybackService.sync(
-          ref.read(playerControllerProvider),
-          position: ref.read(playbackPositionProvider).value,
-          artwork: next.value ?? Uint8List(0),
-          favorite: _currentFavorite(ref.read(playerControllerProvider)),
-          lyric: _currentLyric(ref.read(playbackPositionProvider).value),
-        ),
-      );
+    ref.listen<AsyncValue<Uint8List?>>(currentCoverProvider, (_, __) {
+      // 只重新按当前歌曲读取 provider.future，不直接使用监听回调的字节，
+      // 这样旧歌曲的迟到结果不会污染新歌曲的系统封面。
+      unawaited(_refreshArtworkForCurrentTrack());
     });
     ref.listen<AsyncValue<Lyrics?>>(currentLyricsProvider, (_, next) {
       unawaited(

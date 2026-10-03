@@ -21,10 +21,11 @@ class SourceSectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppAccent accent = AppAccent.of(context);
     return Text(
       text,
-      style: const TextStyle(
-        color: Color(0x8CFFFFFF),
+      style: TextStyle(
+        color: accent.uiMutedText,
         fontSize: 10,
         fontWeight: FontWeight.w600,
         letterSpacing: 2.2,
@@ -66,27 +67,28 @@ class SourceField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppAccent accent = AppAccent.of(context);
     return TextField(
       controller: controller,
       autofocus: autofocus,
       obscureText: obscure,
       onSubmitted: onSubmitted == null ? null : (_) => onSubmitted!(),
-      style: const TextStyle(color: Colors.white, fontSize: 12.5),
+      style: TextStyle(color: accent.uiText, fontSize: 12.5),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         isDense: true,
-        labelStyle: const TextStyle(color: Color(0xB3FFFFFF), fontSize: 11.5),
-        hintStyle: const TextStyle(color: Color(0x66FFFFFF), fontSize: 11.5),
+        labelStyle: TextStyle(color: accent.uiMutedText, fontSize: 11.5),
+        hintStyle: TextStyle(color: accent.uiDisabledText, fontSize: 11.5),
         filled: true,
-        fillColor: Colors.black.withValues(alpha: 0.22),
+        fillColor: accent.uiPanelFill,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+          borderSide: BorderSide(color: accent.uiBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+          borderSide: BorderSide(color: accent.uiBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -112,19 +114,20 @@ class SourceHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppAccent accent = AppAccent.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Icon(icon, size: 22, color: const Color(0x66FFFFFF)),
+            Icon(icon, size: 22, color: accent.uiDisabledText),
             const SizedBox(height: 10),
             Text(
               text,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Color(0xB3FFFFFF),
+              style: TextStyle(
+                color: accent.uiMutedText,
                 fontSize: 13,
                 height: 1.7,
                 shadows: <Shadow>[
@@ -187,7 +190,7 @@ class SourceStatusLine extends StatelessWidget {
             maxLines: maxLines,
             overflow: maxLines == null ? null : TextOverflow.ellipsis,
             style: TextStyle(
-              color: ok ? Colors.white : AppColors.neonMagenta,
+              color: ok ? accent.uiText : AppColors.neonMagenta,
               fontSize: 12,
               height: 1.5,
               shadows: const <Shadow>[
@@ -222,18 +225,21 @@ class SourceCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppAccent accent = AppAccent.of(context);
     final Widget placeholder = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(6),
-        color: Colors.white.withValues(alpha: 0.08),
+        color: accent.isLightMonochrome
+            ? accent.uiPanelFill
+            : Colors.white.withValues(alpha: 0.08),
       ),
       child: Icon(
         Icons.music_note_rounded,
         size: size * 0.45,
-        color: const Color(0x8CFFFFFF),
+        color: accent.uiMutedText,
       ),
     );
 

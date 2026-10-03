@@ -1,8 +1,8 @@
 # HoH music
 
-HoH music 是一个以 Flutter/Dart 编写的跨平台音乐播放器。Windows 首个稳定版本为 `0.1.0`；Android 移动端从 `0.0.1` 预览版开始：支持本地曲库、在线搜索播放、歌单导入导出、歌词、下载管理和动态背景。
+HoH music 是一个以 Flutter/Dart 编写的跨平台音乐播放器。Windows 与 Android 当前正式产品版本均为 `0.1.0`；支持本地曲库、在线搜索播放、歌单导入导出、歌词、下载管理和动态背景。
 
-> 当前版本：Windows `0.1.0+1`，Android `0.0.1` 预览版。Windows 安装器已发布；Android 已加入 runner 和移动端 UI，但仍需 Android SDK 与真机验收。
+> 当前版本：Windows `0.1.0`，Android `0.1.0`（versionCode `2`）。Android Release APK 已构建并按平台命名发布；签名仍使用项目现有 debug signing fallback，长时间播放、通知权限和厂商锁屏行为需真机验收。
 
 正式版首次启动默认使用：音量约 64.43%、列表循环、系统自动选择输出通道；外观默认采用当前确认的液态流光、底部控制区、居中歌词、关闭桌面歌词、开启动画。Android 普通主题使用固定的低开销原生 `BackdropFilter` 玻璃方案；“墨白极简/白墨极简”则切换为无模糊、无渐变的纯色平面高对比 UI，液态玻璃历史参数仅作为主题/偏好兼容数据保留，不在 Android 外观设置中开放。
 
@@ -35,9 +35,10 @@ HoH music 是一个以 Flutter/Dart 编写的跨平台音乐播放器。Windows 
 - 歌单：支持 HoH `.hohplaylist` 备份格式，以及公开芸音/鹅音歌单链接导入；播放歌单时完整解析并一次性建立播放队列，不再逐首临时接管下一首。
 - 下载：后台下载、暂停/继续、删除、断点续传、标签写入，并可定位到歌曲实际保存目录。
 - 外观：液态流光、墨白极简、白墨极简、自定义图片、专辑色渐变联动、固定低开销玻璃材质、字体和主题包导入导出；墨白/白墨主题使用纯色平面组件和高对比文字；Windows 历史液态玻璃参数保留兼容读取。暖霞流光和墨潮折影已移除，旧配置会回退到液态流光。
-- Windows：无边框圆角窗口、紧凑播放器、单实例、系统托盘、全局快捷键、系统媒体控制、桌面歌词和关闭时“保留后台/退出程序”选择。
+- Windows：无边框圆角窗口、紧凑播放器、单实例、系统托盘、全局快捷键、系统媒体控制、桌面歌词和关闭时“保留后台/退出程序”选择；Release 标签使用 `windows-v<版本号>`。
 - Android：底部导航、单列首页/发现/我的/设置；首页支持快捷搜索、歌单导入和自建/导入歌单直达，当前播放卡片新增三句轻量滚动歌词、带当前/总时长的可拖动进度条和扩大触控范围，迷你播放器可进入歌词播放页并在上一首左侧直接喜欢，右上角为播放列表入口，迷你播放器封面使用旋转黑胶；点击“我的”始终进入歌单总览；我的页面支持新建/导入歌单、大卡片歌单列表、左滑删除普通歌单和所有歌曲入口；全屏播放页提供按窗口高度自适应的轻量逐字歌词，喜欢按钮位于上一首左侧、播放列表位于下一首右侧，播放列表内可切换播放顺序，并为队列歌曲提供下载、加入指定歌单、喜欢和移除操作，歌词页更多菜单提供歌曲信息/下载/加入歌单。在线搜索移除占空间较大的标题说明区，只保留搜索框、平台、音质、搜索按钮和可滚动结果；歌单在线音源地址并行解析，当前歌曲歌词优先准备，减少首曲等待；音源管理适配窄屏滚动，音乐库下方可直接添加/同步 WebDAV；播放时使用轻量媒体前台服务和 Android `MediaSession`，锁屏/通知栏显示歌曲元数据、封面、进度和播放控制并回传 Flutter；通知展开区按左封面、右侧跑马歌词/歌曲信息、进度与底部控制区组织，并提供与主程序联动的爱心；当前歌词额外写入 `METADATA_KEY_DISPLAY_DESCRIPTION` 供通知、车机和厂商媒体面板按自身能力读取，但标准 Android 锁屏不保证展示或滚动歌词；Android 普通主题使用低强度原生 `BackdropFilter`、实体染色和圆角边框，不走液态玻璃折射路径；墨白/白墨主题关闭玻璃、渐变和扫光，使用纯色平面高对比组件；外观设置页不再提供液态玻璃参数；复用共享播放、音源、曲库、歌单和主题逻辑。
-- 更新：版本说明页提供 GitHub 外部链接和手动检查；发现新 Release 时显示非强制更新提示，不会阻断当前版本使用。
+- Android 媒体封面同步按歌曲 ID 和请求版本校验：网络延迟或快速切歌时先清除系统媒体卡片旧封面，待新封面完成后再刷新，避免迟到的旧请求覆盖当前歌曲；白墨极简设置页使用墨色/灰色/蓝色高对比文字，墨白极简和其它深色主题保持原有白字层级。
+- 更新：版本说明页提供 GitHub 外部链接和手动检查；发现新 Windows Release 时显示非强制更新提示，不会阻断当前版本使用。各端 Release 使用 `<platform>-v<version>` 标签，由 GitHub Actions 自动命名为 `HoH music <Platform> v<version>`。
 
 默认音源脚本来自程序目录的 `music音源` 文件夹。程序启动时扫描并登记其中可用脚本，用户可以在音源管理页手动启用、替换或导入其他脚本。用户音乐库和歌曲文件不会被打包进安装器。
 
@@ -95,10 +96,12 @@ Get-FileHash .\dist\windows\HoH-music-Setup-0.1.0-Windows-x64.exe -Algorithm SHA
 
 ## 发布到 GitHub Releases
 
-1. 打开仓库的 [Releases](https://github.com/Huomnh/HoH-music/releases)，选择 **Draft a new release**。
-2. 标签填写 `v0.1.0`，目标分支选择 `main`。
-3. 上传 `dist/windows/HoH-music-Setup-0.1.0-Windows-x64.exe`，并在说明中附上 SHA-256 校验值和已知限制。
-4. 确认 `Set as the latest release` 后发布。应用的非强制更新检查会识别包含 `Windows-x64` 且优先包含 `Setup` 的 `.exe` 安装包。
+1. 构建目标平台产物，并让文件名包含版本、平台和架构。
+2. 创建对应标签：Android 使用 `android-v0.1.0`，Windows 使用 `windows-v0.1.0`。
+3. 推送标签后，`.github/workflows/platform-release.yml` 自动创建 `HoH music Android v0.1.0` 或 `HoH music Windows v0.1.0` Release。
+4. 上传 `HoH-music-0.1.0-Android-universal.apk` 或 `HoH-music-Setup-0.1.0-Windows-x64.exe`，并在说明中附上 SHA-256 校验值和已知限制。
+
+本次 Android `0.1.0` APK 为 121,243,981 bytes，SHA-256：`EA339656890B931A61FCF90F0F0D464F9CA03205C3AB0544B09E8290DFB47313`。当前构建沿用项目现有 debug signing fallback；正式长期分发前应配置受保护的生产 keystore。
 
 源码仓库不提交 `dist/` 安装器；更新机制和命名规则见[更新机制](docs/更新机制.md)。
 
@@ -116,4 +119,4 @@ Get-FileHash .\dist\windows\HoH-music-Setup-0.1.0-Windows-x64.exe -Algorithm SHA
 
 ## 当前边界
 
-当前正式发布目标为 Windows x64；Android `0.0.1` 已可构建 Debug APK，已接入前台播放保活和 Android `MediaSession` 媒体通知/锁屏控制，但音频焦点、通知权限、不同厂商锁屏样式和真机长时间播放尚未完成发布验收。APK 默认输出到 `build/app/outputs/flutter-apk/app-debug.apk`。iOS、macOS、Linux、TV、跨端同步和 Home Assistant 尚未完成独立平台工程与发布验收。
+当前正式发布目标包含 Windows x64 与 Android；Android `0.1.0` 已构建 Release APK，已接入前台播放保活和 Android `MediaSession` 媒体通知/锁屏控制，但音频焦点、通知权限、不同厂商锁屏样式、生产签名和真机长时间播放尚未完成发布后验收。APK 默认 Release 输出到 `build/app/outputs/flutter-apk/app-release.apk`。iOS、macOS、Linux、TV、跨端同步和 Home Assistant 尚未完成独立平台工程与发布验收。

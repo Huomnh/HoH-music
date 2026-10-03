@@ -144,9 +144,9 @@ class _SourceManagerViewState extends ConsumerState<SourceManagerPanel> {
       context: context,
       builder: (BuildContext context) => AlertDialog(
         backgroundColor: const Color(0xF21A1A22),
-        title: const Text(
+        title: Text(
           '从 URL 导入音源脚本',
-          style: TextStyle(color: Colors.white, fontSize: 15),
+          style: TextStyle(color: AppAccent.of(context).uiText, fontSize: 15),
         ),
         content: SizedBox(
           width: 420,
@@ -301,7 +301,7 @@ class _SourceManagerViewState extends ConsumerState<SourceManagerPanel> {
               label: const Text('导入脚本文件'),
               style: FilledButton.styleFrom(
                 backgroundColor: accent.primary.withValues(alpha: 0.85),
-                foregroundColor: Colors.white,
+                foregroundColor: accent.uiText,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 14,
@@ -313,7 +313,7 @@ class _SourceManagerViewState extends ConsumerState<SourceManagerPanel> {
               onPressed: _busy ? null : _importFolder,
               icon: const Icon(Icons.folder_open_outlined, size: 16),
               label: const Text('导入文件夹'),
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              style: TextButton.styleFrom(foregroundColor: accent.primary),
             ),
             TextButton.icon(
               onPressed: _busy
@@ -327,19 +327,19 @@ class _SourceManagerViewState extends ConsumerState<SourceManagerPanel> {
                     },
               icon: const Icon(Icons.history_toggle_off_rounded, size: 15),
               label: const Text('清空在线播放记录'),
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              style: TextButton.styleFrom(foregroundColor: accent.primary),
             ),
             TextButton.icon(
               onPressed: _busy ? null : _importUrl,
               icon: const Icon(Icons.link_rounded, size: 16),
               label: const Text('从 URL 导入'),
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              style: TextButton.styleFrom(foregroundColor: accent.primary),
             ),
             TextButton.icon(
               onPressed: _busy ? null : () => _reload(),
               icon: const Icon(Icons.refresh_rounded, size: 16),
               label: const Text('重新加载'),
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              style: TextButton.styleFrom(foregroundColor: accent.primary),
             ),
           ],
         ),
@@ -455,6 +455,7 @@ class _ScrapeSwitch extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final AppAccent accent = AppAccent.of(context);
     final bool enabled = ref.watch(sourceScrapeProvider).value ?? false;
     return Row(
       children: <Widget>[
@@ -462,9 +463,9 @@ class _ScrapeSwitch extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              const Text(
+              Text(
                 '本地 / WebDAV 曲目也用音源平台刮封面与歌词',
-                style: TextStyle(color: Colors.white, fontSize: 12.5),
+                style: TextStyle(color: accent.uiText, fontSize: 12.5),
               ),
               const SizedBox(height: 3),
               Text(
@@ -480,10 +481,10 @@ class _ScrapeSwitch extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 3),
-              const Text(
+              Text(
                 '标签说明：音源只用于歌词、封面和在线播放匹配，不会修改本地音频文件。',
                 style: TextStyle(
-                  color: Color(0x99FFFFFF),
+                  color: accent.uiDisabledText,
                   fontSize: 10.5,
                   height: 1.5,
                 ),
@@ -596,7 +597,7 @@ class _LibraryPanelState extends ConsumerState<LibraryPanel> {
           entries.isEmpty
               ? '音乐库：还没有添加（本地文件夹 / 单曲都加到这里）'
               : '音乐库：$folderCount 个文件夹 · $fileCount 首单曲',
-          style: const TextStyle(color: Colors.white, fontSize: 12.5),
+          style: TextStyle(color: accent.uiText, fontSize: 12.5),
         ),
         const SizedBox(height: 8),
         Wrap(
@@ -609,7 +610,7 @@ class _LibraryPanelState extends ConsumerState<LibraryPanel> {
               label: const Text('添加文件夹'),
               style: FilledButton.styleFrom(
                 backgroundColor: accent.primary.withValues(alpha: 0.85),
-                foregroundColor: Colors.white,
+                foregroundColor: accent.uiText,
               ),
             ),
             FilledButton.icon(
@@ -618,14 +619,14 @@ class _LibraryPanelState extends ConsumerState<LibraryPanel> {
               label: const Text('添加单曲'),
               style: FilledButton.styleFrom(
                 backgroundColor: accent.primary.withValues(alpha: 0.55),
-                foregroundColor: Colors.white,
+                foregroundColor: accent.uiText,
               ),
             ),
             TextButton.icon(
               onPressed: _busy ? null : _load,
               icon: const Icon(Icons.playlist_play_rounded, size: 15),
               label: const Text('载入音乐库'),
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              style: TextButton.styleFrom(foregroundColor: accent.primary),
             ),
             TextButton.icon(
               onPressed: _busy
@@ -644,7 +645,7 @@ class _LibraryPanelState extends ConsumerState<LibraryPanel> {
                     },
               icon: const Icon(Icons.clear_all_rounded, size: 15),
               label: const Text('清空本地索引'),
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              style: TextButton.styleFrom(foregroundColor: accent.primary),
             ),
           ],
         ),
@@ -669,20 +670,17 @@ class _LibraryPanelState extends ConsumerState<LibraryPanel> {
                     '${entry.exists ? '' : '（路径不存在）'}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xD9FFFFFF),
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: accent.uiText, fontSize: 11),
                   ),
                 ),
                 IconButton(
                   tooltip: '从音乐库移除',
                   onPressed: () =>
                       ref.read(libraryProvider.notifier).remove(entry.path),
-                  icon: const Icon(
+                  icon: Icon(
                     Icons.close_rounded,
                     size: 15,
-                    color: Color(0x99FFFFFF),
+                    color: accent.uiDisabledText,
                   ),
                 ),
               ],
@@ -730,8 +728,8 @@ class WebDavSourcesPanel extends ConsumerWidget {
                 sources.isEmpty
                     ? 'WebDAV 网盘：还没有添加。'
                     : 'WebDAV 网盘：${sources.length} 个（共 ${tracks.length} 首已进曲库）',
-                style: const TextStyle(
-                  color: Color(0xD9FFFFFF),
+                style: TextStyle(
+                  color: accent.uiText,
                   fontSize: 11.5,
                   height: 1.5,
                 ),
@@ -747,14 +745,14 @@ class WebDavSourcesPanel extends ConsumerWidget {
               onPressed: () => _showAddWebDavDialog(context, ref),
               icon: const Icon(Icons.add_link_rounded, size: 15),
               label: const Text('添加网盘'),
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              style: TextButton.styleFrom(foregroundColor: accent.primary),
             ),
             TextButton.icon(
               onPressed: () =>
                   ref.read(webDavLibraryProvider.notifier).refresh(),
               icon: const Icon(Icons.sync_rounded, size: 15),
               label: const Text('全部同步'),
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              style: TextButton.styleFrom(foregroundColor: accent.primary),
             ),
           ],
         ),
@@ -779,8 +777,8 @@ class WebDavSourcesPanel extends ConsumerWidget {
                             '${s.name}　${s.enabled ? '' : '（已停用）'}',
                             style: TextStyle(
                               color: s.enabled
-                                  ? Colors.white
-                                  : const Color(0x99FFFFFF),
+                                  ? accent.uiText
+                                  : accent.uiDisabledText,
                               fontSize: 12.5,
                             ),
                           ),
@@ -789,8 +787,8 @@ class WebDavSourcesPanel extends ConsumerWidget {
                             '${s.autoSync ? ' · 启动自动同步' : ''}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0x99FFFFFF),
+                            style: TextStyle(
+                              color: accent.uiDisabledText,
                               fontSize: 10.5,
                             ),
                           ),
@@ -826,10 +824,10 @@ class WebDavSourcesPanel extends ConsumerWidget {
                           ),
                         );
                       },
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.delete_outline_rounded,
                         size: 18,
-                        color: Color(0x99FFFFFF),
+                        color: accent.uiDisabledText,
                       ),
                     ),
                   ],
@@ -1019,8 +1017,8 @@ class _CachePanelState extends ConsumerState<_CachePanel> {
               Text(
                 '歌曲信息缓存：${stats.entries} 条 · ${stats.sizeLabel}'
                 '（歌词 ${stats.lyrics} · 刮削匹配 ${stats.matches} · 封面地址 ${stats.covers}）',
-                style: const TextStyle(
-                  color: Color(0xD9FFFFFF),
+                style: TextStyle(
+                  color: accent.uiText,
                   fontSize: 11.5,
                   height: 1.5,
                 ),
@@ -1067,7 +1065,7 @@ class _CachePanelState extends ConsumerState<_CachePanel> {
                 )
               : const Icon(Icons.delete_sweep_outlined, size: 15),
           label: const Text('清理缓存'),
-          style: TextButton.styleFrom(foregroundColor: Colors.white),
+          style: TextButton.styleFrom(foregroundColor: accent.primary),
         ),
       ],
     );
@@ -1176,8 +1174,8 @@ class _SourceRow extends StatelessWidget {
                   source.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: accent.uiText,
                     fontSize: 13,
                     shadows: <Shadow>[
                       Shadow(color: Color(0x99000000), blurRadius: 6),
@@ -1188,10 +1186,7 @@ class _SourceRow extends StatelessWidget {
               if (source.version.isNotEmpty)
                 Text(
                   'v${source.version}',
-                  style: const TextStyle(
-                    color: Color(0x8CFFFFFF),
-                    fontSize: 10.5,
-                  ),
+                  style: TextStyle(color: accent.uiMutedText, fontSize: 10.5),
                 ),
               const SizedBox(width: 6),
               Switch(
@@ -1202,10 +1197,10 @@ class _SourceRow extends StatelessWidget {
               IconButton(
                 tooltip: '删除',
                 onPressed: onDelete,
-                icon: const Icon(
+                icon: Icon(
                   Icons.delete_outline_rounded,
                   size: 18,
-                  color: Color(0x99FFFFFF),
+                  color: accent.uiDisabledText,
                 ),
               ),
             ],
@@ -1244,10 +1239,7 @@ class _SourceRow extends StatelessWidget {
                 '${source.location}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0x66FFFFFF),
-                  fontSize: 10.5,
-                ),
+                style: TextStyle(color: accent.uiDisabledText, fontSize: 10.5),
               ),
             ),
         ],
@@ -1272,6 +1264,7 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppAccent accent = AppAccent.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
@@ -1283,7 +1276,7 @@ class _Chip extends StatelessWidget {
       child: Text(
         text,
         style: TextStyle(
-          color: dim ? const Color(0x99FFFFFF) : Colors.white,
+          color: dim ? accent.uiDisabledText : accent.uiText,
           fontSize: 10.5,
         ),
       ),

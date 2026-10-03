@@ -136,10 +136,10 @@ class _WebDavViewState extends ConsumerState<WebDavView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const Text(
+          Text(
             'WEBDAV',
             style: TextStyle(
-              color: Color(0x8CFFFFFF),
+              color: accent.uiMutedText,
               fontSize: 10,
               fontWeight: FontWeight.w600,
               letterSpacing: 2.2,
@@ -197,7 +197,7 @@ class _WebDavViewState extends ConsumerState<WebDavView> {
                 label: const Text('保存并连接'),
                 style: FilledButton.styleFrom(
                   backgroundColor: accent.primary.withValues(alpha: 0.85),
-                  foregroundColor: Colors.white,
+                  foregroundColor: accent.uiText,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 14,
@@ -220,7 +220,7 @@ class _WebDavViewState extends ConsumerState<WebDavView> {
                   child: Text(
                     _status!,
                     style: TextStyle(
-                      color: _statusOk ? Colors.white : AppColors.neonMagenta,
+                      color: _statusOk ? accent.uiText : AppColors.neonMagenta,
                       fontSize: 12,
                       shadows: const <Shadow>[
                         Shadow(color: Color(0x99000000), blurRadius: 6),
@@ -263,8 +263,8 @@ class _WebDavViewState extends ConsumerState<WebDavView> {
                   _client == null ? '未连接' : _path,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Color(0xD9FFFFFF),
+                  style: TextStyle(
+                    color: accent.uiText,
                     fontSize: 12.5,
                     shadows: <Shadow>[
                       Shadow(color: Color(0x99000000), blurRadius: 6),
@@ -277,7 +277,7 @@ class _WebDavViewState extends ConsumerState<WebDavView> {
                   onPressed: _playable.isEmpty ? null : () => _playAll(),
                   icon: const Icon(Icons.play_circle_outline, size: 16),
                   label: Text('播放本目录 ${_playable.length} 首'),
-                  style: TextButton.styleFrom(foregroundColor: Colors.white),
+                  style: TextButton.styleFrom(foregroundColor: accent.primary),
                 ),
             ],
           ),
@@ -476,25 +476,26 @@ class _Field extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppAccent accent = AppAccent.of(context);
     return TextField(
       controller: controller,
       obscureText: obscure,
-      style: const TextStyle(color: Colors.white, fontSize: 12.5),
+      style: TextStyle(color: accent.uiText, fontSize: 12.5),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         isDense: true,
-        labelStyle: const TextStyle(color: Color(0xB3FFFFFF), fontSize: 11.5),
-        hintStyle: const TextStyle(color: Color(0x66FFFFFF), fontSize: 11.5),
+        labelStyle: TextStyle(color: accent.uiMutedText, fontSize: 11.5),
+        hintStyle: TextStyle(color: accent.uiDisabledText, fontSize: 11.5),
         filled: true,
-        fillColor: Colors.black.withValues(alpha: 0.22),
+        fillColor: accent.uiPanelFill,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+          borderSide: BorderSide(color: accent.uiBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
+          borderSide: BorderSide(color: accent.uiBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -533,17 +534,13 @@ class _LibrarySyncRowState extends ConsumerState<_LibrarySyncRow> {
                 ? '音乐库里的网盘曲目：还没有同步（配好地址后点「同步到音乐库」）'
                 : '音乐库里的网盘曲目：${tracks.length} 首'
                       '${auto ? '（启动自动同步已开）' : '（自动同步已关）'}',
-            style: const TextStyle(
-              color: Color(0xD9FFFFFF),
-              fontSize: 11.5,
-              height: 1.5,
-            ),
+            style: TextStyle(color: accent.uiText, fontSize: 11.5, height: 1.5),
           ),
         ),
         Text(
           '启动自动同步',
           style: TextStyle(
-            color: auto ? Colors.white : const Color(0x99FFFFFF),
+            color: auto ? accent.uiText : accent.uiDisabledText,
             fontSize: 11.5,
           ),
         ),
@@ -600,7 +597,7 @@ class _LibrarySyncRowState extends ConsumerState<_LibrarySyncRow> {
                 )
               : const Icon(Icons.sync_rounded, size: 15),
           label: const Text('同步到音乐库'),
-          style: TextButton.styleFrom(foregroundColor: Colors.white),
+          style: TextButton.styleFrom(foregroundColor: accent.primary),
         ),
       ],
     );
@@ -660,7 +657,7 @@ class _EntryRowState extends State<_EntryRow> {
                     ? accent.primary
                     : (e.looksLikeAudio
                           ? accent.secondary
-                          : const Color(0x8CFFFFFF)),
+                          : accent.uiMutedText),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -670,8 +667,8 @@ class _EntryRowState extends State<_EntryRow> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: e.looksLikeAudio
-                        ? Colors.white
-                        : const Color(0xD9FFFFFF),
+                        ? accent.uiText
+                        : accent.uiMutedText,
                     fontSize: 13,
                     shadows: const <Shadow>[
                       Shadow(color: Color(0x99000000), blurRadius: 6),
@@ -682,20 +679,14 @@ class _EntryRowState extends State<_EntryRow> {
               if (!e.isDirectory && e.size > 0)
                 Text(
                   '${(e.size / 1024 / 1024).toStringAsFixed(1)} MB',
-                  style: const TextStyle(
-                    color: Color(0x8CFFFFFF),
-                    fontSize: 11,
-                  ),
+                  style: TextStyle(color: accent.uiMutedText, fontSize: 11),
                 ),
               if (e.modified != null) ...<Widget>[
                 const SizedBox(width: 10),
                 Text(
                   '${e.modified!.year}-${e.modified!.month.toString().padLeft(2, '0')}-'
                   '${e.modified!.day.toString().padLeft(2, '0')}',
-                  style: const TextStyle(
-                    color: Color(0x8CFFFFFF),
-                    fontSize: 11,
-                  ),
+                  style: TextStyle(color: accent.uiMutedText, fontSize: 11),
                 ),
               ],
             ],
@@ -714,12 +705,13 @@ class _Hint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppAccent accent = AppAccent.of(context);
     return Center(
       child: Text(
         text,
         textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: Color(0xB3FFFFFF),
+        style: TextStyle(
+          color: accent.uiMutedText,
           fontSize: 13,
           height: 1.6,
           shadows: <Shadow>[Shadow(color: Color(0x99000000), blurRadius: 6)],
