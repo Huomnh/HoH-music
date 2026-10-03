@@ -8,14 +8,12 @@
 library;
 
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/audio/player_engine.dart';
 import '../../core/audio/player_providers.dart';
-import '../../core/metadata/cover_art.dart';
 import '../library/library_views.dart';
 import '../library/playlists.dart';
 import '../library/playlist_transfer.dart';
@@ -77,7 +75,10 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
             bottom: false,
             child: Column(
               children: <Widget>[
-                _MobileTopBar(title: _titles[_tab], onOpenPlayer: _openPlayer),
+                _MobileTopBar(
+                  title: _titles[_tab],
+                  onOpenQueue: () => unawaited(_showMobileQueue(context, ref)),
+                ),
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 280),
@@ -150,10 +151,10 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
 }
 
 class _MobileTopBar extends StatelessWidget {
-  const _MobileTopBar({required this.title, required this.onOpenPlayer});
+  const _MobileTopBar({required this.title, required this.onOpenQueue});
 
   final String title;
-  final VoidCallback onOpenPlayer;
+  final VoidCallback onOpenQueue;
 
   @override
   Widget build(BuildContext context) {
@@ -186,9 +187,9 @@ class _MobileTopBar extends StatelessWidget {
           ),
           const Spacer(),
           IconButton(
-            tooltip: '打开正在播放',
-            onPressed: onOpenPlayer,
-            icon: const VinylRecord(size: 34, labelRatio: 0.5),
+            tooltip: '播放列表',
+            onPressed: onOpenQueue,
+            icon: const Icon(Icons.queue_music_rounded),
           ),
         ],
       ),
@@ -269,7 +270,7 @@ class _MobileHomeView extends ConsumerWidget {
             const SizedBox(width: 10),
             Expanded(
               child: _QuickAction(
-                icon: Icons.file_upload_outlined,
+                icon: Icons.file_download_outlined,
                 title: '导入歌单',
                 color: accent.secondary,
                 onTap: onImportPlaylist,
@@ -507,7 +508,7 @@ class _MobileLibraryViewState extends ConsumerState<_MobileLibraryView> {
               IconButton(
                 tooltip: '导入歌单',
                 onPressed: _importPlaylist,
-                icon: const Icon(Icons.file_upload_outlined),
+                icon: const Icon(Icons.file_download_outlined),
               ),
             ],
           ),
@@ -1054,25 +1055,12 @@ class _MobileMiniPlayer extends ConsumerWidget {
   }
 }
 
-class _MiniCover extends ConsumerWidget {
+class _MiniCover extends StatelessWidget {
   const _MiniCover();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final Uint8List? cover = ref.watch(currentCoverProvider).value;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: cover == null
-          ? const ColoredBox(
-              color: Color(0x334C65B8),
-              child: SizedBox(
-                width: 42,
-                height: 42,
-                child: Icon(Icons.music_note_rounded, size: 20),
-              ),
-            )
-          : Image.memory(cover, width: 42, height: 42, fit: BoxFit.cover),
-    );
+  Widget build(BuildContext context) {
+    return const VinylRecord(size: 42, labelRatio: 0.5);
   }
 }
 
@@ -1203,12 +1191,7 @@ class _MobileNowPlaying extends ConsumerWidget {
                               ),
                               IconButton(
                                 tooltip: '播放列表',
-                                onPressed: () => _showMobileQueue(
-                                  context,
-                                  ref,
-                                  state,
-                                  controller,
-                                ),
+                                onPressed: () => _showMobileQueue(context, ref),
                                 icon: const Icon(Icons.queue_music_rounded),
                                 style: IconButton.styleFrom(
                                   side: BorderSide(
@@ -1231,81 +1214,86 @@ class _MobileNowPlaying extends ConsumerWidget {
   }
 }
 
-Future<void> _showMobileQueue(
-  BuildContext context,
-  WidgetRef ref,
-  PlayerUiState state,
-  PlayerController controller,
-) async {
-  final PendingPlaylist? pending = ref.read(pendingPlaylistProvider);
-  final List<Track> tracks = pending?.tracks ?? state.queue;
-  final int activeIndex = pending?.activeIndex ?? state.currentIndex;
+Future<void> _showMobileQueue(BuildContext context, WidgetRef ref) async {
   await showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
-    builder: (BuildContext sheetContext) => SafeArea(
-      child: SizedBox(
-        height: MediaQuery.sizeOf(sheetContext).height * .65,
-        child: Column(
-          children: <Widget>[
-            ListTile(
-              title: Text('播放列表（${tracks.length}）'),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  IconButton(
-                    tooltip: '播放顺序：${state.mode.label}',
-                    onPressed: () => ref
-                        .read(playerControllerProvider.notifier)
-                        .cyclePlaybackMode(),
-                    icon: Icon(_mobileModeIcon(state.mode)),
+    builder: (BuildContext sheetContext) => Consumer(
+      builder: (BuildContext context, WidgetRef sheetRef, Widget? child) {
+        final PlayerUiState state = sheetRef.watch(playerControllerProvider);
+        final PendingPlaylist? pending = sheetRef.watch(
+          pendingPlaylistProvider,
+        );
+        final List<Track> tracks = pending?.tracks ?? state.queue;
+        final int activeIndex = pending?.activeIndex ?? state.currentIndex;
+        final PlayerController controller = sheetRef.read(
+          playerControllerProvider.notifier,
+        );
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(sheetContext).height * .65,
+            child: Column(
+              children: <Widget>[
+                ListTile(
+                  title: Text('播放列表（${tracks.length}）'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      IconButton(
+                        tooltip: '播放顺序：${state.mode.label}',
+                        onPressed: () => controller.cyclePlaybackMode(),
+                        icon: Icon(_mobileModeIcon(state.mode)),
+                      ),
+                      IconButton(
+                        tooltip: '关闭',
+                        onPressed: () => Navigator.pop(sheetContext),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
                   ),
-                  IconButton(
-                    tooltip: '关闭',
-                    onPressed: () => Navigator.pop(sheetContext),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: tracks.length,
-                itemBuilder: (BuildContext context, int index) {
-                  final Track track = tracks[index];
-                  return ListTile(
-                    selected: index == activeIndex,
-                    leading: Text('${index + 1}'),
-                    title: Text(
-                      track.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      track.artist,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: () async {
-                      if (pending != null) {
-                        await playPendingPlaylistTrack(
-                          ref,
-                          pending.tracks,
-                          index,
-                        );
-                      } else {
-                        await controller.playAt(index);
-                      }
-                      if (sheetContext.mounted) Navigator.pop(sheetContext);
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: tracks.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      final Track track = tracks[index];
+                      return ListTile(
+                        selected: index == activeIndex,
+                        leading: Text('${index + 1}'),
+                        title: Text(
+                          track.title.isEmpty ? '（未知曲名）' : track.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          track.artist.isEmpty ? '未知歌手' : track.artist,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () async {
+                          if (pending != null) {
+                            await playPendingPlaylistTrack(
+                              sheetRef,
+                              pending.tracks,
+                              index,
+                            );
+                          } else {
+                            await controller.playAt(index);
+                          }
+                          if (sheetContext.mounted) {
+                            Navigator.pop(sheetContext);
+                          }
+                        },
+                      );
                     },
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     ),
   );
 }

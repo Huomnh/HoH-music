@@ -40,9 +40,36 @@ final libraryTracksProvider = Provider<List<Track>>((ref) {
 final playlistTracksProvider = Provider<List<Track>>((ref) {
   final List<Track> tracks = List<Track>.of(ref.watch(libraryTracksProvider));
   final online = ref.watch(onlineLibraryProvider).value ?? const [];
-  final Set<String> ids = tracks.map((Track track) => track.id).toSet();
+  final Map<String, int> indexById = <String, int>{
+    for (int i = 0; i < tracks.length; i++) tracks[i].id: i,
+  };
   for (final track in online) {
-    if (ids.add(track.id)) tracks.add(trackFromOnline(track));
+    final int? index = indexById[track.id];
+    if (index == null) {
+      indexById[track.id] = tracks.length;
+      tracks.add(trackFromOnline(track));
+      continue;
+    }
+    final Track existing = tracks[index];
+    // 导入在线歌单时，某些旧索引只留下 id/时长；在线记录才有标题、歌手、
+    // 专辑和平台信息。用完整元数据覆盖空字段，避免移动端歌单只显示“·”。
+    if (existing.title.trim().isEmpty || existing.artist.trim().isEmpty) {
+      tracks[index] = Track(
+        id: existing.id,
+        uri: existing.uri,
+        title: existing.title.trim().isEmpty ? track.title : existing.title,
+        artist: existing.artist.trim().isEmpty ? track.artist : existing.artist,
+        album: existing.album.trim().isEmpty ? track.album : existing.album,
+        duration:
+            existing.duration ??
+            (track.duration == Duration.zero ? null : track.duration),
+        // 进入 onlineLibrary 的记录本身就是远程曲目；OnlineTrack 没有
+        // 重复维护 isRemote 字段，统一由这里标记为远程。
+        isRemote: true,
+        source: existing.source ?? track.platformLabel,
+        quality: existing.quality ?? track.quality,
+      );
+    }
   }
   return tracks;
 });
@@ -322,7 +349,14 @@ class _TrackRowState extends ConsumerState<TrackRow> {
   @override
   Widget build(BuildContext context) {
     final AppAccent accent = AppAccent.of(context);
+    final bool compact = MediaQuery.sizeOf(context).width < 600;
     final bool liked = ref.watch(isFavoriteProvider(widget.track.id));
+    final String title = widget.track.title.trim().isEmpty
+        ? (widget.track.id.split(':').lastOrNull ?? '未知曲目')
+        : widget.track.title;
+    final String artist = widget.track.artist.trim().isEmpty
+        ? '未知歌手'
+        : widget.track.artist;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
@@ -352,7 +386,9 @@ class _TrackRowState extends ConsumerState<TrackRow> {
                         color: accent.primary,
                       )
                     : Text(
-                        widget.index == null ? '·' : '${widget.index}',
+                        compact && widget.index == null
+                            ? ''
+                            : (widget.index == null ? '·' : '${widget.index}'),
                         style: const TextStyle(
                           color: Color(0x8CFFFFFF),
                           fontSize: 11.5,
@@ -365,7 +401,7 @@ class _TrackRowState extends ConsumerState<TrackRow> {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     Text(
-                      widget.track.title,
+                      title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -381,7 +417,9 @@ class _TrackRowState extends ConsumerState<TrackRow> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '${widget.track.artist} · ${widget.track.album}',
+                      widget.track.album.trim().isEmpty
+                          ? artist
+                          : '$artist · ${widget.track.album}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -420,9 +458,12 @@ class _TrackRowState extends ConsumerState<TrackRow> {
                       : const Color(0x99FFFFFF),
                 ),
               ),
-              // 「添加到播放队列」——用户要求放在心形**后面**
-              _AddToQueueButton(tracks: <Track>[widget.track]),
-              _AddToPlaylistButton(track: widget.track),
+              // 手机窄屏优先保证歌名/歌手可见，把次要操作收起；桌面保留
+              // 完整的加入队列/加入歌单按钮。
+              if (!compact) ...<Widget>[
+                _AddToQueueButton(tracks: <Track>[widget.track]),
+                _AddToPlaylistButton(track: widget.track),
+              ],
               if (widget.allowRemoveFromLibrary)
                 IconButton(
                   tooltip: '从所有歌曲移除（不删除文件）',

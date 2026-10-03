@@ -147,6 +147,7 @@ class SourceStatusLine extends StatelessWidget {
     required this.text,
     required this.ok,
     this.busy = false,
+    this.maxLines,
   });
 
   /// 文本。
@@ -157,6 +158,9 @@ class SourceStatusLine extends StatelessWidget {
 
   /// 是否进行中（显示转圈）。
   final bool busy;
+
+  /// 窄屏搜索页限制状态摘要高度，避免把结果列表挤出可滚动区域。
+  final int? maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -180,6 +184,8 @@ class SourceStatusLine extends StatelessWidget {
         Expanded(
           child: Text(
             text,
+            maxLines: maxLines,
+            overflow: maxLines == null ? null : TextOverflow.ellipsis,
             style: TextStyle(
               color: ok ? Colors.white : AppColors.neonMagenta,
               fontSize: 12,

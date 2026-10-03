@@ -53,7 +53,10 @@ class PoolPlayResult {
   bool get ok => played > 0 && failed.isEmpty;
 }
 
-/// 歌单的“待解析队列”。队列先展示完整曲目，但在线地址只在播放某一首时解析。
+/// 兼容旧状态的待解析队列模型。
+///
+/// 当前歌单播放默认一次性解析并提交完整队列；这个模型只用于兼容旧
+/// 运行状态和少数仍需要按需匹配的入口，不再作为普通歌单播放路径。
 class PendingPlaylist {
   const PendingPlaylist({required this.tracks, this.activeIndex = -1});
 
@@ -88,11 +91,7 @@ final pendingPlaylistProvider =
 
 final math.Random _pendingPlaylistRandom = math.Random();
 
-/// 按统一播放模式步进“待解析歌单”。
-///
-/// 在线歌单首次播放时，底层播放器只会暂时载入当前已经解析好的那一首，
-/// 但 [pendingPlaylistProvider] 保存了完整歌单。桌面端和 Android 端都必须
-/// 从这里切歌，否则 Android 直接调用 `player.next()` 只能看到这一首。
+/// 兼容旧待解析状态的播放模式步进器。
 Future<PoolPlayResult> stepPendingPlaylist(
   WidgetRef ref, {
   required int delta,
@@ -187,8 +186,6 @@ Future<PoolPlayResult> playPoolTracks(
   final List<Track> ready = <Track>[];
   final List<String> failed = <String>[];
   final List<String> providers = <String>[];
-  // 曲库页播放时需要现搜索/解析的在线曲目
-  final List<OnlineTrack> pendingOnline = <OnlineTrack>[];
   final String clickedId = (startIndex >= 0 && startIndex < tracks.length)
       ? tracks[startIndex].id
       : '';
@@ -234,19 +231,11 @@ Future<PoolPlayResult> playPoolTracks(
       continue;
     }
 
-    // ③ 在线曲目：需要**现解析地址**（网络！）
-    //
-    // ⚠️ 0.0.43 性能修复：从「所有歌曲」点歌时**不要**在这里解析。
-    // 池子里有几十首在线曲目，逐个解析 = 点一下要等十几秒
-    //（用户反馈："所有歌曲里选中播放的速度很慢"）。
-    // 曲库页（!append）把在线曲目收集起来，稍后统一解析，确保打开队列时完整。
+    // ③ 在线曲目：播放歌单时也在这里完整解析，随后一次性提交整张队列。
+    // 地址会过期，不能持久化，但不能因此把歌单退化成“只播放当前一首”。
     final OnlineTrack? online = onlineById[track.id];
     if (online == null) {
       failed.add('${track.title}：找不到这首的来源信息');
-      continue;
-    }
-    if (!append) {
-      pendingOnline.add(online);
       continue;
     }
     final SourceResolveResult resolved = await host.resolveMusicUrl(
@@ -286,35 +275,9 @@ Future<PoolPlayResult> playPoolTracks(
 
   onProgress?.call(tracks.length, tracks.length, '');
 
-  // 歌单播放规则：播放器队列面板先展示完整歌单；只匹配并解析被点击的歌曲。
-  // 手动点队列下一首或当前曲目播放完成后，再按需解析对应曲目。
-  if (!append && pendingOnline.isNotEmpty) {
-    final List<Track> pendingTracks = <Track>[
-      for (final Track track in tracks) track,
-    ];
-    ref
-        .read(pendingPlaylistProvider.notifier)
-        .setPending(
-          PendingPlaylist(tracks: pendingTracks, activeIndex: startIndex),
-        );
-    final PoolPlayResult first = await playPendingPlaylistTrack(
-      ref,
-      pendingTracks,
-      startIndex,
-      quality: quality,
-    );
-    return PoolPlayResult(
-      played: first.played,
-      failed: first.failed,
-      providers: first.providers,
-    );
-  }
-
-  // 非在线待解析歌单播放时，清掉上一张歌单的按需状态，避免队列抽屉
-  // 或下一首按钮继续引用旧歌单。
-  if (!append) {
-    ref.read(pendingPlaylistProvider.notifier).setPending(null);
-  }
+  // 当前已经把整份歌单解析完成；清掉旧版本遗留的按需状态，避免队列
+  // 抽屉或完成监听继续劫持这次完整播放列表。
+  ref.read(pendingPlaylistProvider.notifier).setPending(null);
 
   if (ready.isEmpty) {
     return PoolPlayResult(failed: failed, appended: append);
@@ -341,11 +304,9 @@ Future<PoolPlayResult> playPoolTracks(
     return const PoolPlayResult(played: 1);
   }
 
-  // 所有歌曲通常都是本地文件：首播只打开点中的文件，避免一次性构建
-  // 几百首 Playlist 把第一声音乐拖到很晚；在线歌单则已在上方补齐完整队列。
-  if (!append &&
-      pendingOnline.isEmpty &&
-      ready.every((Track t) => !t.isRemote && t.uri.isNotEmpty)) {
+  // 本地曲目使用完整 Playlist；PlayerEngine 内部会一次性提交列表，
+  // 因而本地、在线和导入歌单的下一首语义完全一致。
+  if (!append && ready.every((Track t) => !t.isRemote && t.uri.isNotEmpty)) {
     await ref
         .read(playerControllerProvider.notifier)
         .playLocalTracksFast(ready, startIndex: readyIndex, autoPlay: autoPlay);

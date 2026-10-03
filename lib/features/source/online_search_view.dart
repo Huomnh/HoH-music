@@ -546,7 +546,12 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
 
           if (_status.isNotEmpty) ...<Widget>[
             const SizedBox(height: 10),
-            SourceStatusLine(text: _status, ok: _statusOk, busy: _busy),
+            SourceStatusLine(
+              text: _status,
+              ok: _statusOk,
+              busy: _busy,
+              maxLines: MediaQuery.sizeOf(context).width < 600 ? 4 : null,
+            ),
           ],
           if (_busy && _progressTotal > 0) ...<Widget>[
             const SizedBox(height: 8),

@@ -3,6 +3,7 @@ library;
 
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -188,17 +189,31 @@ class _GlassPanelState extends State<GlassPanel> {
         child: Padding(padding: widget.padding, child: widget.child),
       ),
     );
-    // liquid_glass_plus 在 Android 窄屏上叠加多个滚动内容时会重复采样
-    // 下方图层，表现为内容折射错位、滚动时闪动。移动端采用稳定的实体
-    // 半透明面板，保留圆角和边框层次，同时显著减少 GPU 重绘。
+    // Android 没有跨厂商统一的“系统液态玻璃”公开 API，不能可靠地调用
+    // 某一家系统的私有材质。这里使用 Flutter/Skia 的 BackdropFilter 做
+    // 低强度背景模糊，再叠加高不透明度染色和边框：各家 Android 都能用，
+    // 不采样折射/位移，也不会把下方滚动列表错误折射到当前面板。
     final Widget material = defaultTargetPlatform == TargetPlatform.android
-        ? DecoratedBox(
-            decoration: BoxDecoration(
-              color: const Color(0xD9141A2C),
-              borderRadius: widget.borderRadius,
-              border: Border.all(color: Colors.white.withValues(alpha: .16)),
+        ? ClipRRect(
+            borderRadius: widget.borderRadius,
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: const Color(0xD9141A2C),
+                  borderRadius: widget.borderRadius,
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: .18),
+                  ),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[Color(0xCC29344E), Color(0xD9141A2C)],
+                  ),
+                ),
+                child: panelContent,
+              ),
             ),
-            child: panelContent,
           )
         : LiquidGlass.withOwnLayer(
             settings: settings,

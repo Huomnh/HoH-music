@@ -189,6 +189,7 @@ class _OnlineTrackRowState extends ConsumerState<OnlineTrackRow> {
   @override
   Widget build(BuildContext context) {
     final AppAccent accent = AppAccent.of(context);
+    final bool compact = MediaQuery.sizeOf(context).width < 600;
     final OnlineTrack track = widget.track;
     final bool liked = ref.watch(isFavoriteProvider(track.id));
     final Uint8List? cover = ref.watch(onlineCoverProvider(track.id)).value;
@@ -238,7 +239,7 @@ class _OnlineTrackRowState extends ConsumerState<OnlineTrackRow> {
               SourceCover(bytes: cover, fallbackUrl: track.coverUrl, size: 46),
               const SizedBox(width: 10),
               Expanded(
-                flex: 5,
+                flex: compact ? 1 : 5,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
@@ -289,24 +290,26 @@ class _OnlineTrackRowState extends ConsumerState<OnlineTrackRow> {
                       : const Color(0x99FFFFFF),
                 ),
               ),
-              IconButton(
-                tooltip: '添加到播放队列',
-                onPressed: _busy ? null : _enqueue,
-                icon: const Icon(
-                  Icons.playlist_add_rounded,
-                  size: 18,
-                  color: Color(0x99FFFFFF),
+              if (!compact) ...<Widget>[
+                IconButton(
+                  tooltip: '添加到播放队列',
+                  onPressed: _busy ? null : _enqueue,
+                  icon: const Icon(
+                    Icons.playlist_add_rounded,
+                    size: 18,
+                    color: Color(0x99FFFFFF),
+                  ),
                 ),
-              ),
-              IconButton(
-                tooltip: '下载到本地',
-                onPressed: _busy ? null : _download,
-                icon: const Icon(
-                  Icons.download_rounded,
-                  size: 18,
-                  color: Color(0x99FFFFFF),
+                IconButton(
+                  tooltip: '下载到本地',
+                  onPressed: _busy ? null : _download,
+                  icon: const Icon(
+                    Icons.download_rounded,
+                    size: 18,
+                    color: Color(0x99FFFFFF),
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(width: 2),
               if (_busy)
                 const SizedBox(

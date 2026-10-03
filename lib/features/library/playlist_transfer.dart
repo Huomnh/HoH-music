@@ -365,7 +365,7 @@ class PlaylistTransferButtons extends ConsumerWidget {
               }
             }
           },
-          icon: const Icon(Icons.file_upload_outlined, size: 15),
+          icon: const Icon(Icons.file_download_outlined, size: 15),
           color: const Color(0xB3FFFFFF),
         ),
         IconButton(
@@ -373,7 +373,7 @@ class PlaylistTransferButtons extends ConsumerWidget {
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
           onPressed: () => _showExportPicker(context, ref),
-          icon: const Icon(Icons.file_download_outlined, size: 15),
+          icon: const Icon(Icons.file_upload_outlined, size: 15),
           color: const Color(0xB3FFFFFF),
         ),
       ],
