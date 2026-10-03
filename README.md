@@ -116,4 +116,4 @@ Get-FileHash .\dist\windows\HoH-music-Setup-0.1.0-Windows-x64.exe -Algorithm SHA
 
 ## 当前边界
 
-当前正式发布目标为 Windows x64；Android 已完成首版移动端工程和 UI 预览接入，但后台音频、媒体通知、权限和真机长时间播放尚未完成发布验收。iOS、macOS、Linux、TV、跨端同步和 Home Assistant 尚未完成独立平台工程与发布验收。
+当前正式发布目标为 Windows x64；Android `0.0.1` 已可构建 Debug APK，但后台音频、媒体通知、权限和真机长时间播放尚未完成发布验收。APK 默认输出到 `build/app/outputs/flutter-apk/app-debug.apk`。iOS、macOS、Linux、TV、跨端同步和 Home Assistant 尚未完成独立平台工程与发布验收。

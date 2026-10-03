@@ -12,6 +12,8 @@ Android runner 已加入仓库，移动端 UI 版本从 `0.0.1` 起算。当前�
 - 设置页的外观、播放、音源管理和版本说明子页面；
 - 底部迷你播放器、全屏播放页、歌词面板、进度拖动、上一首/下一首和播放暂停。
 
+当前已成功构建 Debug APK：`build/app/outputs/flutter-apk/app-debug.apk`。本机尚未连接 Android 真机或启动模拟器，因此还没有完成触控、播放和后台行为验收。
+
 播放引擎、音源脚本、曲库、歌单、歌词解析、主题和持久化状态继续复用共享 Dart 层。Windows 的窗口、托盘、桌面歌词、全局快捷键和 SMTC 不会在 Android 挂载。
 
 ## 构建环境
@@ -68,3 +70,4 @@ Windows 仍使用独立的 `0.1.0` 正式版发布流程。后续 Android 发布
 - 后台播放通知、音频焦点、耳机按键、锁屏媒体控制和前台服务仍需 Android 专项适配；
 - Android 文件访问权限、下载目录选择和音源脚本导入需要在真实设备上逐项验收；
 - 本机若没有 Android SDK，`flutter build apk` 会在构建前直接失败，这是环境限制，不代表 Dart/Flutter 静态分析失败。
+- 如果项目目录与 Pub 缓存位于不同磁盘，`android/gradle.properties` 已关闭 Kotlin 增量编译，并将旧版 `flutter_js` 的 JVM 目标差异降为 warning，以保证 APK 可以稳定构建；首次构建会自动下载 NDK、CMake 和 `media_kit` 播放库，耗时可能较长。
