@@ -135,8 +135,14 @@ class HoHPlaybackService : Service() {
             .putString(MediaMetadata.METADATA_KEY_ARTIST, artist)
             .putString(MediaMetadata.METADATA_KEY_ALBUM, album)
             .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, title)
-            .putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, lyric)
-            .putString(MediaMetadata.METADATA_KEY_DISPLAY_DESCRIPTION, artist)
+            // DISPLAY_SUBTITLE 给支持第二行媒体信息的系统保留歌手，
+            // DISPLAY_DESCRIPTION 作为歌词的最佳努力传递通道；Android 15
+            // SystemUI 是否展示 description 由系统/厂商决定，不强行改写标题或歌手。
+            .putString(
+                MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE,
+                artist.ifEmpty { "正在播放" },
+            )
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_DESCRIPTION, lyric)
             .putLong(MediaMetadata.METADATA_KEY_DURATION, durationMs)
         artwork?.let { bitmap ->
             metadata.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, bitmap)
@@ -168,7 +174,7 @@ class HoHPlaybackService : Service() {
                     PlaybackState.CustomAction.Builder(
                         ACTION_FAVORITE,
                         if (favorite) "取消喜欢" else "加入喜欢",
-                        if (favorite) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off,
+                        if (favorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border,
                     ).build(),
                 )
                 .build()
@@ -212,7 +218,7 @@ class HoHPlaybackService : Service() {
             .addAction(action(android.R.drawable.ic_media_next, "下一首", ACTION_NEXT, 12))
             .addAction(
                 action(
-                    if (favorite) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off,
+                    if (favorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border,
                     if (favorite) "取消喜欢" else "加入喜欢",
                     ACTION_FAVORITE,
                     13,
@@ -228,9 +234,40 @@ class HoHPlaybackService : Service() {
         views.setTextViewText(R.id.notification_title, title)
         views.setTextViewText(R.id.notification_artist, artist.ifEmpty { "正在播放" })
         views.setTextViewText(R.id.notification_lyric, lyric.ifEmpty { "" })
+        views.setBoolean(R.id.notification_lyric, "setSelected", true)
         artwork?.let { bitmap ->
             views.setImageViewBitmap(R.id.notification_artwork, bitmap)
         }
+        views.setImageViewResource(
+            R.id.notification_play_pause,
+            if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+        )
+        views.setContentDescription(
+            R.id.notification_play_pause,
+            if (playing) "暂停" else "播放",
+        )
+        views.setOnClickPendingIntent(
+            R.id.notification_play_pause,
+            servicePendingIntent(if (playing) ACTION_PAUSE else ACTION_PLAY, 11),
+        )
+        views.setOnClickPendingIntent(
+            R.id.notification_previous,
+            servicePendingIntent(ACTION_PREVIOUS, 10),
+        )
+        views.setOnClickPendingIntent(
+            R.id.notification_next,
+            servicePendingIntent(ACTION_NEXT, 12),
+        )
+        val progress = if (durationMs > 0L) {
+            ((positionMs.toDouble() / durationMs.toDouble()) * 1000.0)
+                .coerceIn(0.0, 1000.0)
+                .toInt()
+        } else {
+            0
+        }
+        views.setProgressBar(R.id.notification_progress, 1000, progress, false)
+        views.setTextViewText(R.id.notification_position, formatTime(positionMs))
+        views.setTextViewText(R.id.notification_duration, formatTime(durationMs))
         views.setImageViewResource(
             R.id.notification_favorite,
             if (favorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border,
@@ -239,13 +276,22 @@ class HoHPlaybackService : Service() {
             R.id.notification_favorite,
             if (favorite) "取消喜欢" else "加入喜欢",
         )
-        val favoriteIntent = Intent(this, HoHPlaybackService::class.java)
-            .setAction(ACTION_FAVORITE)
         views.setOnClickPendingIntent(
             R.id.notification_favorite,
-            PendingIntent.getService(this, 14, favoriteIntent, pendingFlags()),
+            servicePendingIntent(ACTION_FAVORITE, 14),
         )
         return views
+    }
+
+    private fun servicePendingIntent(action: String, requestCode: Int): PendingIntent {
+        val intent = Intent(this, HoHPlaybackService::class.java).setAction(action)
+        return PendingIntent.getService(this, requestCode, intent, pendingFlags())
+    }
+
+    private fun formatTime(milliseconds: Long): String {
+        val seconds = (milliseconds / 1000L).coerceAtLeast(0L)
+        val minutes = seconds / 60L
+        return "%d:%02d".format(minutes, seconds % 60L)
     }
 
     private fun action(

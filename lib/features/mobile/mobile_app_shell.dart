@@ -431,19 +431,30 @@ class _MobileWelcomeCard extends StatelessWidget {
 }
 
 /// 首页当前播放卡片的轻量进度条，不抢占歌词区的主要高度。
-class _WelcomeProgress extends ConsumerWidget {
+class _WelcomeProgress extends ConsumerStatefulWidget {
   const _WelcomeProgress();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_WelcomeProgress> createState() => _WelcomeProgressState();
+}
+
+class _WelcomeProgressState extends ConsumerState<_WelcomeProgress> {
+  double? _dragValue;
+
+  @override
+  Widget build(BuildContext context) {
     final AppAccent accent = AppAccent.of(context);
     final PlayerUiState state = ref.watch(playerControllerProvider);
     final Duration position =
         ref.watch(playbackPositionProvider).value ?? Duration.zero;
     final double total = state.duration.inMilliseconds.toDouble();
-    final double value = total <= 0
-        ? 0
-        : (position.inMilliseconds / total).clamp(0.0, 1.0);
+    final double positionValue = position.inMilliseconds
+        .clamp(0, total > 0 ? total : 0)
+        .toDouble();
+    final double value = (_dragValue ?? positionValue).clamp(
+      0,
+      total > 0 ? total : 1,
+    );
     final PlayerController controller = ref.read(
       playerControllerProvider.notifier,
     );
@@ -468,8 +479,15 @@ class _WelcomeProgress extends ConsumerWidget {
               max: total > 0 ? total : 1,
               onChanged: total <= 0
                   ? null
-                  : (double next) =>
+                  : (double next) => setState(() => _dragValue = next),
+              onChangeEnd: total <= 0
+                  ? null
+                  : (double next) {
+                      setState(() => _dragValue = null);
+                      unawaited(
                         controller.seek(Duration(milliseconds: next.round())),
+                      );
+                    },
             ),
           ),
           Padding(

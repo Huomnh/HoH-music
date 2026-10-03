@@ -1,29 +1,49 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:paddingStart="16dp"
-    android:paddingTop="12dp"
-    android:paddingEnd="12dp"
-    android:paddingBottom="12dp"
-    android:gravity="center_vertical"
+    android:minHeight="260dp"
+    android:padding="16dp"
     android:background="#303030">
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#55000000" />
 
     <ImageView
         android:id="@+id/notification_artwork"
-        android:layout_width="64dp"
-        android:layout_height="64dp"
-        android:scaleType="centerCrop"
+        android:layout_width="112dp"
+        android:layout_height="112dp"
+        android:layout_gravity="start|top"
         android:contentDescription="专辑封面"
-        android:src="@android:drawable/ic_menu_gallery" />
+        android:scaleType="centerCrop"
+        android:background="#454545" />
+
+    <TextView
+        android:id="@+id/notification_lyric"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:layout_marginStart="128dp"
+        android:layout_marginEnd="4dp"
+        android:ellipsize="marquee"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:gravity="center_vertical"
+        android:marqueeRepeatLimit="marquee_forever"
+        android:singleLine="true"
+        android:textColor="#D8E8FF"
+        android:textSize="15sp"
+        android:textStyle="bold" />
 
     <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
+        android:layout_height="112dp"
+        android:layout_marginStart="128dp"
+        android:layout_marginTop="32dp"
+        android:layout_marginEnd="52dp"
         android:orientation="vertical"
-        android:paddingStart="12dp"
-        android:paddingEnd="8dp">
+        android:gravity="center_vertical">
 
         <TextView
             android:id="@+id/notification_title"
@@ -31,36 +51,102 @@
             android:layout_height="wrap_content"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="#FFFFFFFF"
-            android:textSize="16sp"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/notification_artist"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="#FFCCCCCC"
-            android:textSize="13sp" />
-
-        <TextView
-            android:id="@+id/notification_lyric"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:ellipsize="end"
-            android:maxLines="2"
-            android:textColor="#FFB7D7FF"
-            android:textSize="13sp" />
+            android:textColor="#C8C8C8"
+            android:textSize="14sp" />
     </LinearLayout>
 
     <ImageButton
-        android:id="@+id/notification_favorite"
+        android:id="@+id/notification_play_pause"
         android:layout_width="48dp"
         android:layout_height="48dp"
-        android:background="@android:color/transparent"
-        android:contentDescription="加入喜欢"
+        android:layout_gravity="end|top"
+        android:layout_marginTop="56dp"
+        android:background="#E8E8E8"
+        android:contentDescription="播放"
         android:padding="12dp"
-        android:src="@drawable/ic_favorite_border" />
-</LinearLayout>
+        android:src="@android:drawable/ic_media_play" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginBottom="44dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/notification_position"
+            android:layout_width="42dp"
+            android:layout_height="wrap_content"
+            android:gravity="start"
+            android:text="0:00"
+            android:textColor="#E8E8E8"
+            android:textSize="12sp" />
+
+        <ProgressBar
+            android:id="@+id/notification_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="0dp"
+            android:layout_height="20dp"
+            android:layout_weight="1"
+            android:max="1000"
+            android:progress="0"
+            android:progressTint="#A7D8FF" />
+
+        <TextView
+            android:id="@+id/notification_duration"
+            android:layout_width="42dp"
+            android:layout_height="wrap_content"
+            android:gravity="end"
+            android:text="0:00"
+            android:textColor="#E8E8E8"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_gravity="bottom"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/notification_previous"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:contentDescription="上一首"
+            android:src="@android:drawable/ic_media_previous" />
+
+        <ImageButton
+            android:id="@+id/notification_next"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:contentDescription="下一首"
+            android:src="@android:drawable/ic_media_next" />
+
+        <ImageButton
+            android:id="@+id/notification_favorite"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:contentDescription="加入喜欢"
+            android:padding="8dp"
+            android:src="@drawable/ic_favorite_border" />
+    </LinearLayout>
+</FrameLayout>
