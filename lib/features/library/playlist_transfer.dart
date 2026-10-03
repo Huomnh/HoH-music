@@ -87,7 +87,6 @@ Future<PlaylistTransferResult?> importPlaylist(
   BuildContext context,
   WidgetRef ref,
 ) async {
-  final TextEditingController urlController = TextEditingController();
   final _PlaylistImportMode? mode = await showDialog<_PlaylistImportMode>(
     context: context,
     builder: (BuildContext dialogContext) => AlertDialog(
@@ -115,7 +114,6 @@ Future<PlaylistTransferResult?> importPlaylist(
   if (mode == null) return null;
 
   if (mode == _PlaylistImportMode.file) {
-    urlController.dispose();
     return _importHoHPlaylistFile(ref);
   }
 
@@ -123,36 +121,71 @@ Future<PlaylistTransferResult?> importPlaylist(
   final String platformName = mode == _PlaylistImportMode.qq ? '鹅音' : '芸音';
   final String? input = await showDialog<String>(
     context: context,
-    builder: (BuildContext dialogContext) => AlertDialog(
-      title: Text('导入$platformName歌单'),
-      content: TextField(
-        controller: urlController,
-        autofocus: true,
-        decoration: InputDecoration(
-          labelText: '$platformName歌单链接',
-          hintText: mode == _PlaylistImportMode.qq
-              ? '支持 y.qq.com 或 c6.y.qq.com 分享链接'
-              : '支持 music.163.com 或 163cn.tv 分享链接',
-        ),
-      ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(urlController.text),
-          child: const Text('读取并导入'),
-        ),
-      ],
+    builder: (BuildContext dialogContext) => _PlaylistUrlDialog(
+      platformName: platformName,
+      hintText: mode == _PlaylistImportMode.qq
+          ? '支持 y.qq.com 或 c6.y.qq.com 分享链接'
+          : '支持 music.163.com 或 163cn.tv 分享链接',
     ),
   );
   if (!context.mounted) return null;
-  urlController.dispose();
   if (input == null || input.trim().isEmpty) return null;
   return mode == _PlaylistImportMode.qq
       ? _importQqPlaylist(input, ref)
       : _importNeteasePlaylist(input, ref);
+}
+
+/// 歌单链接弹窗自己持有输入控制器。
+///
+/// `showDialog` 返回值会早于退出动画完成，不能在调用方收到结果后立即
+/// dispose 一个仍被弹窗里的 TextField 使用的 controller，否则 Flutter debug
+/// 模式会先报 controller disposed，再触发 InheritedElement 生命周期断言。
+class _PlaylistUrlDialog extends StatefulWidget {
+  const _PlaylistUrlDialog({
+    required this.platformName,
+    required this.hintText,
+  });
+
+  final String platformName;
+  final String hintText;
+
+  @override
+  State<_PlaylistUrlDialog> createState() => _PlaylistUrlDialogState();
+}
+
+class _PlaylistUrlDialogState extends State<_PlaylistUrlDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('导入${widget.platformName}歌单'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: InputDecoration(
+          labelText: '${widget.platformName}歌单链接',
+          hintText: widget.hintText,
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('读取并导入'),
+        ),
+      ],
+    );
+  }
 }
 
 Future<PlaylistTransferResult> _importNeteasePlaylist(

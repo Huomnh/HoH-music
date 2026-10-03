@@ -508,30 +508,10 @@ class _MobileLibraryViewState extends ConsumerState<_MobileLibraryView> {
   }
 
   Future<void> _createPlaylist() async {
-    final TextEditingController controller = TextEditingController();
     final String? name = await showDialog<String>(
       context: context,
-      builder: (BuildContext dialogContext) => AlertDialog(
-        title: const Text('新建歌单'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 40,
-          decoration: const InputDecoration(hintText: '歌单名称'),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('创建'),
-          ),
-        ],
-      ),
+      builder: (BuildContext dialogContext) => const _CreatePlaylistDialog(),
     );
-    controller.dispose();
     if (!mounted || name == null || name.trim().isEmpty) return;
     final Playlist playlist = await ref
         .read(playlistsProvider.notifier)
@@ -550,6 +530,46 @@ class _MobileLibraryViewState extends ConsumerState<_MobileLibraryView> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('导入失败：$error')));
     }
+  }
+}
+
+class _CreatePlaylistDialog extends StatefulWidget {
+  const _CreatePlaylistDialog();
+
+  @override
+  State<_CreatePlaylistDialog> createState() => _CreatePlaylistDialogState();
+}
+
+class _CreatePlaylistDialogState extends State<_CreatePlaylistDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('新建歌单'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        maxLength: 40,
+        decoration: const InputDecoration(hintText: '歌单名称'),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: const Text('创建'),
+        ),
+      ],
+    );
   }
 }
 

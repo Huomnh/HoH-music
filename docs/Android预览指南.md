@@ -15,6 +15,8 @@ Android runner 已加入仓库，移动端 UI 版本从 `0.0.1` 起算。当前�
 
 当前已成功构建 Debug APK：`build/app/outputs/flutter-apk/app-debug.apk`。本轮补充歌单入口、轻量逐字歌词、播放页队列/喜欢操作和黑白极简背景；Android 玻璃面板关闭折射采样以降低错层和 GPU 压力，并加入播放时的 Android 前台媒体服务保活。已在 `emulator-5554` 安装启动验证，触控、播放、通知权限和不同厂商后台行为仍建议由用户在其他模拟器/真机验收。
 
+歌单链接导入和新建歌单弹窗由各自的 Stateful dialog 管理输入 controller，避免弹窗退出动画尚未结束就释放 controller 导致 Flutter debug 红屏；网易云公开链接（包括带 `playlist?id=` 的链接）仍只读取歌单元数据，实际播放地址由音源重新解析。
+
 播放引擎、音源脚本、曲库、歌单、歌词解析、主题和持久化状态继续复用共享 Dart 层。Windows 的窗口、托盘、桌面歌词、全局快捷键和 SMTC 不会在 Android 挂载。
 
 ## 构建环境
