@@ -144,6 +144,7 @@ class _GlassPanelState extends State<GlassPanel> {
 
   bool get _wantsSweep =>
       defaultTargetPlatform != TargetPlatform.android &&
+      !AppAccent.of(context).isMonochrome &&
       widget.sweep &&
       widget.showSweepAt &&
       widget.glowOpacity > 0;
@@ -151,12 +152,21 @@ class _GlassPanelState extends State<GlassPanel> {
   @override
   void initState() {
     super.initState();
-    if (_wantsSweep) _sweep = GlassSweepClock.acquire(widget.initialSweepPhase);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncSweep();
   }
 
   @override
   void didUpdateWidget(GlassPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _syncSweep();
+  }
+
+  void _syncSweep() {
     if (_wantsSweep && _sweep == null) {
       _sweep = GlassSweepClock.acquire(widget.initialSweepPhase);
     } else if (!_wantsSweep && _sweep != null) {
@@ -177,6 +187,7 @@ class _GlassPanelState extends State<GlassPanel> {
 
   @override
   Widget build(BuildContext context) {
+    final AppAccent accent = AppAccent.of(context);
     final config = BlurConfigScope.of(context);
     final settings = buildHohLiquidGlassSettings(
       config,
@@ -194,7 +205,10 @@ class _GlassPanelState extends State<GlassPanel> {
     // scrolling text cannot bleed into the panel and several panels do not
     // create the heavier liquid-glass shader path at once.
     final bool isAndroid = defaultTargetPlatform == TargetPlatform.android;
-    final Widget material = isAndroid
+    final bool flatMonochrome = accent.isMonochrome;
+    final Widget material = flatMonochrome
+        ? _flatMonochromeSurface(panelContent, accent)
+        : isAndroid
         ? ClipRRect(
             borderRadius: widget.borderRadius,
             child: widget.blurEnabled
@@ -214,7 +228,7 @@ class _GlassPanelState extends State<GlassPanel> {
           )
         : _androidTintedSurface(panelContent);
     final sweep = _sweep;
-    if (sweep == null) return material;
+    if (sweep == null || flatMonochrome) return material;
     return Stack(
       fit: StackFit.passthrough,
       children: <Widget>[
@@ -234,6 +248,20 @@ class _GlassPanelState extends State<GlassPanel> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _flatMonochromeSurface(Widget child, AppAccent accent) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: accent.panelSurface,
+        borderRadius: widget.borderRadius,
+        border: Border.all(
+          color: accent.foreground.withValues(alpha: .24),
+          width: 1,
+        ),
+      ),
+      child: child,
     );
   }
 

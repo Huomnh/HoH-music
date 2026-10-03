@@ -112,7 +112,7 @@ class HoHMusicApp extends ConsumerWidget {
     final Widget app = MaterialApp(
       title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
-      theme: _buildDarkTheme(accent, fonts.uiFamily ?? 'KirakaraMaru'),
+      theme: _buildTheme(accent, fonts.uiFamily ?? 'KirakaraMaru'),
       themeAnimationDuration: const Duration(milliseconds: 820),
       themeAnimationCurve: Curves.easeInOutCubic,
       // 把渲染参数与强调色下发到整棵子树：
@@ -125,25 +125,39 @@ class HoHMusicApp extends ConsumerWidget {
     return !kIsWeb && Platform.isWindows ? ExcludeSemantics(child: app) : app;
   }
 
-  /// 深色主题。底色取自 [AppColors]，强调色跟随背景（见 [AppAccent]）。
-  ThemeData _buildDarkTheme(AppAccent accent, String? uiFontFamily) {
+  /// 主题底色跟随黑白极简预设；其它背景继续使用原有深色玻璃基线。
+  ThemeData _buildTheme(AppAccent accent, String? uiFontFamily) {
+    final Brightness brightness = accent.isLightMonochrome
+        ? Brightness.light
+        : Brightness.dark;
     final ColorScheme scheme =
         ColorScheme.fromSeed(
           seedColor: accent.primary,
-          brightness: Brightness.dark,
+          brightness: brightness,
         ).copyWith(
-          surface: AppColors.midnight,
+          surface: accent.isMonochrome
+              ? accent.panelSurface
+              : AppColors.midnight,
           primary: accent.primary,
           secondary: accent.secondary,
+          onSurface: accent.foreground,
         );
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
+      brightness: brightness,
       fontFamily: uiFontFamily,
       colorScheme: scheme,
-      scaffoldBackgroundColor: AppColors.abyss,
-      dividerColor: AppColors.divider,
+      scaffoldBackgroundColor: accent.isMonochrome
+          ? (accent.isLightMonochrome
+                ? const Color(0xFFF7F7F7)
+                : const Color(0xFF090909))
+          : AppColors.abyss,
+      dividerColor: accent.isMonochrome
+          ? (accent.isLightMonochrome
+                ? const Color(0xFFBDBDBD)
+                : const Color(0xFF3A3A3A))
+          : AppColors.divider,
       splashFactory: NoSplash.splashFactory,
     );
   }

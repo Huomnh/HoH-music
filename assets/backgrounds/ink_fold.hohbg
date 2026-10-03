@@ -1,7 +1,0 @@
-{
-  "format": "hoh-background",
-  "version": 1,
-  "renderer": "ink-fold",
-  "speed": 0.42,
-  "colors": ["0xFF172341", "0xFF286D78", "0xFF8A4268"]
-}

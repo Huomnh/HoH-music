@@ -30,12 +30,6 @@ enum BackgroundKind {
   /// 动态液态光场：默认推荐的现代玻璃背景。
   liquidBloom('液态流光', '缓慢流动的柔和彩色光场'),
 
-  /// 暖霞流光；保留 deepTide 标识以兼容旧设置和主题包。
-  deepTide('暖霞流光', '暖橙珊瑚与金色光晕缓慢呼吸'),
-
-  /// 墨潮折影：多层流体墨带缓慢交叠，避开粒子与光球构图。
-  inkFold('墨潮折影', '靛青与青绿墨带缓慢折叠流动'),
-
   /// 墨白极简：静态黑底白光，适合低性能 Android 设备。
   monochromeDark('墨白极简', '黑底白光的低负载简约背景'),
 
@@ -64,20 +58,6 @@ Map<String, Object?> builtInBackgroundDefinition(BackgroundKind kind) {
       'speed': 1.0,
       'followTheme': true,
       'colors': <String>['0xFF5D7CFF', '0xFFFF78C8', '0xFF47E5C2'],
-    },
-    BackgroundKind.deepTide => <String, Object?>{
-      'format': 'hoh-background',
-      'version': 1,
-      'renderer': 'sunset-ember',
-      'speed': 0.58,
-      'colors': <String>['0xFFFF8A5B', '0xFFFFC857', '0xFFE85D75'],
-    },
-    BackgroundKind.inkFold => <String, Object?>{
-      'format': 'hoh-background',
-      'version': 1,
-      'renderer': 'ink-fold',
-      'speed': 0.42,
-      'colors': <String>['0xFF172341', '0xFF286D78', '0xFF8A4268'],
     },
     BackgroundKind.monochromeDark => <String, Object?>{
       'format': 'hoh-background',
@@ -222,24 +202,24 @@ class BackgroundController extends Notifier<BackgroundSelection> {
         orElse: () => BackgroundKind.liquidBloom,
       );
 
-      Map<String, Object?>? definition = decodedDefinition is Map
+      final Map<String, Object?>? definition = decodedDefinition is Map
           ? decodedDefinition.map(
               (Object? key, Object? value) => MapEntry(key.toString(), value),
             )
           : null;
-      // 0.0.98：把已保存的旧“深海潮汐”定义迁移为暖霞流光。
-      if (kind == BackgroundKind.deepTide &&
-          definition?['renderer'] == 'deep-tide') {
-        definition = builtInBackgroundDefinition(kind);
-      }
-      // 已移除的彩虹甜心不再作为可用背景；旧设置或主题包统一回退到
+      // 已移除的背景不再作为可用背景；旧设置或主题包统一回退到
       // 液态流光，避免删除 renderer 后仍由旧 dynamicDefinition 触发旧画法。
-      final bool removedAnime =
-          kindName == 'animeCandy' || definition?['renderer'] == 'anime-candy';
+      final bool removedBackground =
+          kindName == 'animeCandy' ||
+          kindName == 'deepTide' ||
+          kindName == 'inkFold' ||
+          definition?['renderer'] == 'anime-candy' ||
+          definition?['renderer'] == 'sunset-ember' ||
+          definition?['renderer'] == 'ink-fold';
       state = BackgroundSelection(
-        kind: removedAnime ? BackgroundKind.liquidBloom : kind,
+        kind: removedBackground ? BackgroundKind.liquidBloom : kind,
         customImagePath: (path == null || path.isEmpty) ? null : path,
-        dynamicDefinition: removedAnime
+        dynamicDefinition: removedBackground
             ? builtInBackgroundDefinition(BackgroundKind.liquidBloom)
             : definition,
       );
@@ -322,18 +302,6 @@ class BackgroundLayer extends StatelessWidget {
         definition: selection.dynamicDefinition,
         themeColors: _themeColors(context, selection.effectiveKind),
       ),
-      BackgroundKind.deepTide => LiquidBloomScene(
-        animated: animated,
-        definition:
-            selection.dynamicDefinition ??
-            builtInBackgroundDefinition(BackgroundKind.deepTide),
-      ),
-      BackgroundKind.inkFold => LiquidBloomScene(
-        animated: animated,
-        definition:
-            selection.dynamicDefinition ??
-            builtInBackgroundDefinition(BackgroundKind.inkFold),
-      ),
       BackgroundKind.monochromeDark => const MonochromeScene(light: false),
       BackgroundKind.monochromeLight => const MonochromeScene(light: true),
       BackgroundKind.custom => LiquidBloomScene(
@@ -341,6 +309,12 @@ class BackgroundLayer extends StatelessWidget {
         definition: selection.dynamicDefinition,
       ), // 上面已拦截，兜底
     };
+
+    // 黑白极简主题使用单色底，不再叠加渐变或玻璃氛围层。
+    if (selection.effectiveKind == BackgroundKind.monochromeDark ||
+        selection.effectiveKind == BackgroundKind.monochromeLight) {
+      return scene;
+    }
 
     // 统一压一层暗色。
     //

@@ -6,7 +6,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Android / 低性能设备的静态黑白背景，不启动计时器或 CustomPainter。
+/// Android / 低性能设备的静态黑白背景，不启动计时器、渐变或 CustomPainter。
 class MonochromeScene extends StatelessWidget {
   const MonochromeScene({super.key, required this.light});
 
@@ -14,21 +14,8 @@ class MonochromeScene extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<Color> colors = light
-        ? const <Color>[Color(0xFFF8F8F8), Color(0xFFE8E8E8), Color(0xFFFFFFFF)]
-        : const <Color>[
-            Color(0xFF050505),
-            Color(0xFF171717),
-            Color(0xFF000000),
-          ];
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: colors,
-        ),
-      ),
+    return ColoredBox(
+      color: light ? const Color(0xFFF7F7F7) : const Color(0xFF090909),
     );
   }
 }
@@ -139,26 +126,12 @@ class _LiquidBloomPainter extends CustomPainter {
     final Rect rect = Offset.zero & size;
     final double w = size.width;
     final double h = size.height;
-    final String renderer =
-        definition?['renderer']?.toString() ?? 'liquid-bloom';
-    final List<Color> baseColors = switch (renderer) {
-      'sunset-ember' => const <Color>[
-        Color(0xFF321A25),
-        Color(0xFF51302B),
-        Color(0xFF211525),
-      ],
-      'ink-fold' => const <Color>[
-        Color(0xFF080E20),
-        Color(0xFF101B32),
-        Color(0xFF100E21),
-      ],
-      _ => const <Color>[
-        Color(0xFF11152C),
-        Color(0xFF182B42),
-        Color(0xFF101A32),
-        Color(0xFF090B19),
-      ],
-    };
+    final List<Color> baseColors = const <Color>[
+      Color(0xFF11152C),
+      Color(0xFF182B42),
+      Color(0xFF101A32),
+      Color(0xFF090B19),
+    ];
     canvas.drawRect(
       rect,
       Paint()
@@ -201,12 +174,7 @@ class _LiquidBloomPainter extends CustomPainter {
     Color colorAt(int index, Color fallback) =>
         colors.length > index ? colors[index] : fallback;
 
-    if (renderer == 'ink-fold') {
-      _paintInkFold(canvas, size, phase, colorAt);
-      return;
-    }
-
-    final double bloomAlpha = renderer == 'sunset-ember' ? 0.34 : 0.42;
+    const double bloomAlpha = 0.42;
     bloom(
       0.22 + math.sin(phase) * 0.06,
       0.22 + math.cos(phase) * 0.05,
@@ -224,134 +192,6 @@ class _LiquidBloomPainter extends CustomPainter {
       0.86 + math.cos(phase * 2) * 0.04,
       h * 0.48,
       colorAt(2, const Color(0xFF47E5C2)).withValues(alpha: bloomAlpha),
-    );
-  }
-
-  /// 分层墨带以缓慢变形的等高线穿过画面；没有粒子、圆形光球或噪声滤镜。
-  void _paintInkFold(
-    Canvas canvas,
-    Size size,
-    double phase,
-    Color Function(int index, Color fallback) colorAt,
-  ) {
-    final double w = size.width;
-    final double h = size.height;
-    final Rect bounds = Offset.zero & size;
-    canvas.drawRect(
-      bounds,
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            Color(0xFF0A1125),
-            Color(0xFF11182C),
-            Color(0xFF100D1E),
-            Color(0xFF080E1A),
-          ],
-          stops: <double>[0, .38, .72, 1],
-        ).createShader(bounds),
-    );
-
-    final List<Color> inks = <Color>[
-      colorAt(0, const Color(0xFF172341)),
-      colorAt(1, const Color(0xFF286D78)),
-      colorAt(2, const Color(0xFF8A4268)),
-      const Color(0xFF314B83),
-    ];
-
-    for (int layer = 0; layer < 5; layer++) {
-      final double direction = layer.isEven ? 1 : -1;
-      final double baseY = h * (.22 + layer * .145);
-      final double amplitude = h * (.075 + (layer % 3) * .018);
-      final double offset = phase * direction + layer * 1.31;
-      final double thickness = h * (.16 + (layer % 2) * .045);
-      final Path ribbon = Path();
-      const int segments = 48;
-      double edgeY(double t, double extra) {
-        final double wave =
-            math.sin(t * math.pi * 2 + offset) * amplitude +
-            math.sin(t * math.pi * 3 - offset * .63) * amplitude * .32 +
-            math.sin(t * math.pi + offset * .42) * amplitude * .2;
-        final double fold =
-            math.exp(-math.pow((t - (.52 + math.sin(offset) * .19)) * 5, 2)) *
-            h *
-            .07;
-        return baseY + wave + fold + extra;
-      }
-
-      ribbon.moveTo(-w * .04, edgeY(0, -thickness * .5));
-      for (int step = 1; step <= segments; step++) {
-        final double t = step / segments;
-        ribbon.lineTo(w * (t * 1.08 - .04), edgeY(t, -thickness * .5));
-      }
-      for (int step = segments; step >= 0; step--) {
-        final double t = step / segments;
-        ribbon.lineTo(w * (t * 1.08 - .04), edgeY(t, thickness * .5));
-      }
-      ribbon.close();
-
-      final Color ink = inks[layer % inks.length];
-      canvas.drawPath(
-        ribbon,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: <Color>[
-              ink.withValues(alpha: .015),
-              ink.withValues(alpha: .18),
-              ink.withValues(alpha: .27),
-              ink.withValues(alpha: .035),
-            ],
-            stops: const <double>[0, .35, .68, 1],
-          ).createShader(bounds),
-      );
-
-      // 褶皱边缘的一道细墨光强调空间层次，避免整片背景变成平面色带。
-      final Path crease = Path();
-      for (int step = 0; step <= segments; step++) {
-        final double t = step / segments;
-        final Offset point = Offset(
-          w * (t * 1.08 - .04),
-          edgeY(t, thickness * .5),
-        );
-        if (step == 0) {
-          crease.moveTo(point.dx, point.dy);
-        } else {
-          crease.lineTo(point.dx, point.dy);
-        }
-      }
-      canvas.drawPath(
-        crease,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = math.max(1, h * .0015)
-          ..shader = LinearGradient(
-            colors: <Color>[
-              Colors.transparent,
-              ink.withValues(alpha: .22),
-              Colors.white.withValues(alpha: .055),
-              Colors.transparent,
-            ],
-          ).createShader(bounds),
-      );
-    }
-
-    // 暗角让中间的歌词和控制文字保持清楚，同时保留两侧墨色的纵深。
-    canvas.drawRect(
-      bounds,
-      Paint()
-        ..shader = RadialGradient(
-          center: const Alignment(.08, -.12),
-          radius: 1.1,
-          colors: <Color>[
-            Colors.transparent,
-            const Color(0xFF050812).withValues(alpha: .18),
-            const Color(0xFF03050B).withValues(alpha: .46),
-          ],
-          stops: const <double>[.28, .72, 1],
-        ).createShader(bounds),
     );
   }
 

@@ -162,8 +162,6 @@ class ThemeBundle {
 
   static String _backgroundFileStem(BackgroundKind kind) => switch (kind) {
     BackgroundKind.liquidBloom => 'liquid_bloom',
-    BackgroundKind.deepTide => 'deep_tide',
-    BackgroundKind.inkFold => 'ink_fold',
     BackgroundKind.monochromeDark => 'monochrome_dark',
     BackgroundKind.monochromeLight => 'monochrome_light',
     BackgroundKind.custom => 'custom',
@@ -197,12 +195,17 @@ class ThemeBundle {
             (Object? key, Object? value) => MapEntry(key.toString(), value),
           )
         : null;
-    final bool removedAnime =
-        kindName == 'animeCandy' || definition?['renderer'] == 'anime-candy';
+    final bool removedBackground =
+        kindName == 'animeCandy' ||
+        kindName == 'deepTide' ||
+        kindName == 'inkFold' ||
+        definition?['renderer'] == 'anime-candy' ||
+        definition?['renderer'] == 'sunset-ember' ||
+        definition?['renderer'] == 'ink-fold';
     return BackgroundSelection(
-      kind: removedAnime ? BackgroundKind.liquidBloom : parsedKind,
+      kind: removedBackground ? BackgroundKind.liquidBloom : parsedKind,
       customImagePath: map['customImagePath']?.toString(),
-      dynamicDefinition: removedAnime
+      dynamicDefinition: removedBackground
           ? builtInBackgroundDefinition(BackgroundKind.liquidBloom)
           : definition,
     );

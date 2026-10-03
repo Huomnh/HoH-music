@@ -98,7 +98,7 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
                 _MobileMiniPlayer(onTap: _openPlayer),
                 _MobileBottomNavigation(
                   selectedIndex: _tab,
-                  onSelected: (int index) => setState(() => _tab = index),
+                  onSelected: _selectMobileTab,
                 ),
               ],
             ),
@@ -140,6 +140,14 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
   }
 
   void _openPlayer() => setState(() => _playerExpanded = true);
+
+  void _selectMobileTab(int index) {
+    setState(() {
+      _tab = index;
+      // “我的”始终从歌单总览进入，不把上一次打开的具体歌单当成入口。
+      if (index == 2) _libraryPlaylistId = null;
+    });
+  }
 
   Future<void> _importPlaylist() async {
     try {
@@ -323,10 +331,10 @@ class _EmptyMobileHome extends StatelessWidget {
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             '前往“发现”搜索歌曲，或在“我的”中查看本地曲库。',
             textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textTertiary, height: 1.5),
+            style: TextStyle(color: accent.mutedForeground, height: 1.5),
           ),
           const SizedBox(height: 14),
           FilledButton.icon(
@@ -362,43 +370,43 @@ class _MobileWelcomeCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const Text(
+            Text(
               '正在播放',
-              style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+              style: TextStyle(color: accent.mutedForeground, fontSize: 12),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 7),
             Row(
               children: <Widget>[
-                const CoverStage(size: 78),
-                const SizedBox(width: 12),
+                const CoverStage(size: 62),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
                         track.title,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 17,
+                          fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
                         track.artist,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: accent.primary),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 3),
                       Text(
                         track.album,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.textTertiary,
-                          fontSize: 12,
+                        style: TextStyle(
+                          color: accent.mutedForeground,
+                          fontSize: 10,
                         ),
                       ),
                     ],
@@ -406,8 +414,43 @@ class _MobileWelcomeCard extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 5),
+            const _WelcomeProgress(),
+            const SizedBox(height: 5),
+            SizedBox(
+              height: 84,
+              child: ClipRect(
+                child: Center(child: AndroidKaraokeLyrics(compact: true)),
+              ),
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 首页当前播放卡片的轻量进度条，不抢占歌词区的主要高度。
+class _WelcomeProgress extends ConsumerWidget {
+  const _WelcomeProgress();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppAccent accent = AppAccent.of(context);
+    final PlayerUiState state = ref.watch(playerControllerProvider);
+    final Duration position =
+        ref.watch(playbackPositionProvider).value ?? Duration.zero;
+    final double total = state.duration.inMilliseconds.toDouble();
+    final double value = total <= 0
+        ? 0
+        : (position.inMilliseconds / total).clamp(0.0, 1.0);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(2),
+      child: LinearProgressIndicator(
+        value: value,
+        minHeight: 3,
+        backgroundColor: accent.mutedForeground.withValues(alpha: .22),
+        valueColor: AlwaysStoppedAnimation<Color>(accent.primary),
       ),
     );
   }
@@ -444,6 +487,15 @@ class _MobileLibraryViewState extends ConsumerState<_MobileLibraryView> {
   void initState() {
     super.initState();
     _selectedPlaylistId = widget.initialPlaylistId;
+  }
+
+  @override
+  void didUpdateWidget(covariant _MobileLibraryView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialPlaylistId != oldWidget.initialPlaylistId) {
+      _selectedPlaylistId = widget.initialPlaylistId;
+      if (widget.initialPlaylistId == null) _showAllSongs = false;
+    }
   }
 
   @override
@@ -711,8 +763,8 @@ class _LargePlaylistCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     '${playlist.length} 首歌曲 · 点击打开',
-                    style: const TextStyle(
-                      color: AppColors.textTertiary,
+                    style: TextStyle(
+                      color: accent.mutedForeground,
                       fontSize: 12,
                     ),
                   ),
@@ -832,8 +884,8 @@ class _HomePlaylistShortcut extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     '${playlist.length} 首 · 点击打开歌单',
-                    style: const TextStyle(
-                      color: AppColors.textTertiary,
+                    style: TextStyle(
+                      color: accent.mutedForeground,
                       fontSize: 11,
                     ),
                   ),
@@ -888,7 +940,10 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
       return _MobileSubPage(
         title: '版本说明',
         onBack: () => setState(() => _page = 0),
-        child: const VersionInfoView(),
+        child: const SingleChildScrollView(
+          padding: EdgeInsets.only(bottom: 18),
+          child: VersionInfoView(),
+        ),
       );
     }
     return ListView(
@@ -896,23 +951,32 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
       children: <Widget>[
         const _MobileSectionTitle(title: '应用设置'),
         const SizedBox(height: 8),
-        _SettingsTile(
-          icon: Icons.palette_outlined,
-          title: '外观设置',
-          subtitle: '背景、玻璃、字体与歌词样式',
-          onTap: () => setState(() => _page = 1),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _SettingsTile(
+            icon: Icons.palette_outlined,
+            title: '外观设置',
+            subtitle: '背景、字体与歌词样式',
+            onTap: () => setState(() => _page = 1),
+          ),
         ),
-        _SettingsTile(
-          icon: Icons.tune_rounded,
-          title: '播放设置',
-          subtitle: '启动行为、音频输出与快捷键',
-          onTap: () => setState(() => _page = 2),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _SettingsTile(
+            icon: Icons.tune_rounded,
+            title: '播放设置',
+            subtitle: '启动行为、音频输出与快捷键',
+            onTap: () => setState(() => _page = 2),
+          ),
         ),
-        _SettingsTile(
-          icon: Icons.extension_rounded,
-          title: '音源管理',
-          subtitle: '导入并启用在线音乐音源',
-          onTap: () => setState(() => _page = 3),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _SettingsTile(
+            icon: Icons.extension_rounded,
+            title: '音源管理',
+            subtitle: '导入并启用在线音乐音源',
+            onTap: () => setState(() => _page = 3),
+          ),
         ),
         _SettingsTile(
           icon: Icons.info_outline_rounded,
@@ -986,7 +1050,7 @@ class _SettingsTile extends StatelessWidget {
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(
           subtitle,
-          style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
+          style: TextStyle(color: accent.mutedForeground, fontSize: 11),
         ),
         trailing: const Icon(Icons.chevron_right_rounded),
         onTap: onTap,
@@ -1002,6 +1066,7 @@ class _MobileMiniPlayer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final AppAccent accent = AppAccent.of(context);
     final PlayerUiState state = ref.watch(playerControllerProvider);
     final Track? track = state.currentTrack;
     if (track == null) return const SizedBox(height: 8);
@@ -1036,14 +1101,32 @@ class _MobileMiniPlayer extends ConsumerWidget {
                       track.artist,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textTertiary,
+                      style: TextStyle(
+                        color: accent.mutedForeground,
                         fontSize: 10,
                       ),
                     ),
                   ],
                 ),
               ),
+            ),
+            IconButton(
+              tooltip: ref.watch(isFavoriteProvider(track.id))
+                  ? '取消喜欢'
+                  : '加入喜欢',
+              onPressed: () =>
+                  ref.read(playlistsProvider.notifier).toggleFavorite(track.id),
+              icon: Icon(
+                ref.watch(isFavoriteProvider(track.id))
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+                size: 18,
+                color: ref.watch(isFavoriteProvider(track.id))
+                    ? accent.secondary
+                    : accent.mutedForeground,
+              ),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 30, height: 34),
             ),
             IconButton(
               onPressed: () => stepPendingPlaylist(ref, delta: -1),
@@ -1098,7 +1181,11 @@ class _MobileNowPlaying extends ConsumerWidget {
       playerControllerProvider.notifier,
     );
     return Material(
-      color: const Color(0xF20A0D1B),
+      color: accent.isMonochrome
+          ? (accent.isLightMonochrome
+                ? const Color(0xFFF7F7F7)
+                : const Color(0xFF090909))
+          : const Color(0xF20A0D1B),
       child: SafeArea(
         child: Column(
           children: <Widget>[
@@ -1283,6 +1370,7 @@ Future<void> _showMobileQueue(BuildContext context, WidgetRef ref) async {
         final PlayerController controller = sheetRef.read(
           playerControllerProvider.notifier,
         );
+        final AppAccent accent = AppAccent.of(context);
         return SafeArea(
           child: SizedBox(
             height: MediaQuery.sizeOf(sheetContext).height * .65,
@@ -1314,82 +1402,113 @@ Future<void> _showMobileQueue(BuildContext context, WidgetRef ref) async {
                       final bool liked = sheetRef.watch(
                         isFavoriteProvider(track.id),
                       );
-                      return ListTile(
-                        dense: true,
-                        selected: index == activeIndex,
-                        leading: Text('${index + 1}'),
-                        title: Text(
-                          track.title.isEmpty ? '（未知曲名）' : track.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          track.artist.isEmpty ? '未知歌手' : track.artist,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: SizedBox(
-                          width: 126,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: <Widget>[
-                              _queueIconButton(
-                                tooltip: '下载',
-                                icon: Icons.download_outlined,
-                                onPressed: () => _downloadMobileTrack(
-                                  context,
-                                  sheetRef,
-                                  track,
+                      return Material(
+                        color: index == activeIndex
+                            ? accent.primary.withValues(alpha: .10)
+                            : Colors.transparent,
+                        child: InkWell(
+                          onTap: () async {
+                            if (pending != null) {
+                              await playPendingPlaylistTrack(
+                                sheetRef,
+                                pending.tracks,
+                                index,
+                              );
+                            } else {
+                              await controller.playAt(index);
+                            }
+                            if (sheetContext.mounted) {
+                              Navigator.pop(sheetContext);
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 7,
+                            ),
+                            child: Row(
+                              children: <Widget>[
+                                SizedBox(
+                                  width: 26,
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: TextStyle(
+                                      color: accent.mutedForeground,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              _queueIconButton(
-                                tooltip: '加入歌单',
-                                icon: Icons.playlist_add_rounded,
-                                onPressed: () => showDialog<void>(
-                                  context: context,
-                                  builder: (BuildContext dialogContext) =>
-                                      AddToPlaylistDialog(track: track),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: <Widget>[
+                                      Text(
+                                        track.title.isEmpty
+                                            ? '（未知曲名）'
+                                            : track.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        track.artist.isEmpty
+                                            ? '未知歌手'
+                                            : track.artist,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: accent.mutedForeground,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              _queueIconButton(
-                                tooltip: liked ? '取消喜欢' : '加入喜欢',
-                                icon: liked
-                                    ? Icons.favorite_rounded
-                                    : Icons.favorite_border_rounded,
-                                color: liked ? AppColors.neonMagenta : null,
-                                onPressed: () => _toggleMobileFavorite(
-                                  context,
-                                  sheetRef,
-                                  track,
+                                _queueIconButton(
+                                  tooltip: '下载',
+                                  icon: Icons.download_outlined,
+                                  onPressed: () => _downloadMobileTrack(
+                                    context,
+                                    sheetRef,
+                                    track,
+                                  ),
                                 ),
-                              ),
-                              _queueIconButton(
-                                tooltip: '从播放列表移除',
-                                icon: Icons.delete_outline_rounded,
-                                onPressed: () => _removeMobileQueueItem(
-                                  sheetRef,
-                                  pending,
-                                  controller,
-                                  index,
+                                _queueIconButton(
+                                  tooltip: '加入歌单',
+                                  icon: Icons.playlist_add_rounded,
+                                  onPressed: () => showDialog<void>(
+                                    context: context,
+                                    builder: (BuildContext dialogContext) =>
+                                        AddToPlaylistDialog(track: track),
+                                  ),
                                 ),
-                              ),
-                            ],
+                                _queueIconButton(
+                                  tooltip: liked ? '取消喜欢' : '加入喜欢',
+                                  icon: liked
+                                      ? Icons.favorite_rounded
+                                      : Icons.favorite_border_rounded,
+                                  color: liked ? AppColors.neonMagenta : null,
+                                  onPressed: () => _toggleMobileFavorite(
+                                    context,
+                                    sheetRef,
+                                    track,
+                                  ),
+                                ),
+                                _queueIconButton(
+                                  tooltip: '从播放列表移除',
+                                  icon: Icons.delete_outline_rounded,
+                                  onPressed: () => _removeMobileQueueItem(
+                                    sheetRef,
+                                    pending,
+                                    controller,
+                                    index,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        onTap: () async {
-                          if (pending != null) {
-                            await playPendingPlaylistTrack(
-                              sheetRef,
-                              pending.tracks,
-                              index,
-                            );
-                          } else {
-                            await controller.playAt(index);
-                          }
-                          if (sheetContext.mounted) {
-                            Navigator.pop(sheetContext);
-                          }
-                        },
                       );
                     },
                   ),
@@ -1616,6 +1735,7 @@ class _MobileProgress extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final AppAccent accent = AppAccent.of(context);
     final PlayerUiState state = ref.watch(playerControllerProvider);
     final Duration position =
         ref.watch(playbackPositionProvider).value ?? Duration.zero;
@@ -1642,17 +1762,11 @@ class _MobileProgress extends ConsumerWidget {
           children: <Widget>[
             Text(
               _format(position),
-              style: const TextStyle(
-                color: AppColors.textTertiary,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: accent.mutedForeground, fontSize: 11),
             ),
             Text(
               _format(state.duration),
-              style: const TextStyle(
-                color: AppColors.textTertiary,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: accent.mutedForeground, fontSize: 11),
             ),
           ],
         ),
@@ -1676,34 +1790,53 @@ class _MobileBottomNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppAccent accent = AppAccent.of(context);
-    return NavigationBar(
-      height: 68,
-      selectedIndex: selectedIndex,
-      onDestinationSelected: onSelected,
-      backgroundColor: const Color(0xD90D1120),
-      indicatorColor: accent.primary.withValues(alpha: 0.20),
-      destinations: const <NavigationDestination>[
-        NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
-          label: '首页',
+    final bool light = accent.isLightMonochrome;
+    return NavigationBarTheme(
+      data: NavigationBarThemeData(
+        indicatorColor: light
+            ? const Color(0xFF1B1B1B)
+            : accent.primary.withValues(alpha: 0.20),
+        iconTheme: WidgetStateProperty.resolveWith<IconThemeData?>(
+          (Set<WidgetState> states) => IconThemeData(
+            color: light
+                ? (states.contains(WidgetState.selected)
+                      ? Colors.white
+                      : const Color(0xFF242424))
+                : accent.foreground,
+          ),
         ),
-        NavigationDestination(
-          icon: Icon(Icons.explore_outlined),
-          selectedIcon: Icon(Icons.explore_rounded),
-          label: '发现',
+        labelTextStyle: WidgetStatePropertyAll<TextStyle?>(
+          TextStyle(color: light ? const Color(0xFF171717) : accent.foreground),
         ),
-        NavigationDestination(
-          icon: Icon(Icons.library_music_outlined),
-          selectedIcon: Icon(Icons.library_music_rounded),
-          label: '我的',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.settings_outlined),
-          selectedIcon: Icon(Icons.settings_rounded),
-          label: '设置',
-        ),
-      ],
+      ),
+      child: NavigationBar(
+        height: 68,
+        selectedIndex: selectedIndex,
+        onDestinationSelected: onSelected,
+        backgroundColor: accent.navigationSurface,
+        destinations: const <NavigationDestination>[
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: '首页',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.explore_outlined),
+            selectedIcon: Icon(Icons.explore_rounded),
+            label: '发现',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.library_music_outlined),
+            selectedIcon: Icon(Icons.library_music_rounded),
+            label: '我的',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings_rounded),
+            label: '设置',
+          ),
+        ],
+      ),
     );
   }
 }

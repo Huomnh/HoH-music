@@ -57,6 +57,27 @@ class AppAccent {
   final Color? sceneSecondary;
   final Color? sceneTertiary;
 
+  /// Whether the current preset is one of the intentionally flat monochrome
+  /// themes.  These presets are also used by the Android shell to remove
+  /// blur, gradients and translucent glass from the whole component tree.
+  bool get isMonochrome => source == '墨白极简' || source == '白墨极简';
+
+  /// The light monochrome preset uses black ink on a paper-white surface.
+  bool get isLightMonochrome => source == '白墨极简';
+
+  /// Text and icon colors for flat monochrome surfaces.
+  Color get foreground =>
+      isLightMonochrome ? const Color(0xFF171717) : const Color(0xFFF5F5F5);
+
+  Color get mutedForeground =>
+      isLightMonochrome ? const Color(0xFF5A5A5A) : const Color(0xFFBDBDBD);
+
+  Color get panelSurface =>
+      isLightMonochrome ? const Color(0xFFF2F2F2) : const Color(0xFF151515);
+
+  Color get navigationSurface =>
+      isLightMonochrome ? const Color(0xFFFFFFFF) : const Color(0xFF0D0D0D);
+
   List<Color> get sceneColors => <Color>[
     scenePrimary ?? primary,
     sceneSecondary ?? secondary,
@@ -84,28 +105,16 @@ class AppAccent {
   static AppAccent forKind(BackgroundKind kind) {
     return switch (kind) {
       BackgroundKind.liquidBloom => liquidBloom,
-      BackgroundKind.deepTide => const AppAccent(
-        primary: Color(0xFFFF996B),
-        secondary: Color(0xFFFFC857),
-        tertiary: Color(0xFFE85D75),
-        source: '暖霞流光',
-      ),
-      BackgroundKind.inkFold => const AppAccent(
-        primary: Color(0xFF78B7FF),
-        secondary: Color(0xFF4DE0C1),
-        tertiary: Color(0xFFED86B8),
-        source: '墨潮折影',
-      ),
       BackgroundKind.monochromeDark => const AppAccent(
-        primary: Color(0xFFEAEAEA),
-        secondary: Color(0xFFB8B8B8),
-        tertiary: Color(0xFFFFFFFF),
+        primary: Color(0xFF8AAFCB),
+        secondary: Color(0xFFC69AA8),
+        tertiary: Color(0xFFB7C8D5),
         source: '墨白极简',
       ),
       BackgroundKind.monochromeLight => const AppAccent(
-        primary: Color(0xFF202020),
-        secondary: Color(0xFF585858),
-        tertiary: Color(0xFF000000),
+        primary: Color(0xFF3D5E78),
+        secondary: Color(0xFF815968),
+        tertiary: Color(0xFF536B7D),
         source: '白墨极简',
       ),
       // 自定义图片：先用液态流光色，等提取结果回来再替换

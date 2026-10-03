@@ -1,7 +1,0 @@
-{
-  "format": "hoh-background",
-  "version": 1,
-  "renderer": "sunset-ember",
-  "speed": 0.58,
-  "colors": ["0xFFFF8A5B", "0xFFFFC857", "0xFFE85D75"]
-}

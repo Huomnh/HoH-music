@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/update/update_service.dart';
 import '../../shared/constants.dart';
 import '../../shared/theme/app_accent.dart';
-import '../../shared/theme/app_colors.dart';
 import '../../shared/widgets/widget_kit/glass_panel.dart';
 
 /// 独立的版本说明和反馈入口。
@@ -17,13 +16,6 @@ class VersionInfoView extends StatefulWidget {
 }
 
 class _VersionInfoViewState extends State<VersionInfoView> {
-  static const TextStyle _label = TextStyle(
-    color: Color(0x8CFFFFFF),
-    fontSize: 10,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 2.2,
-  );
-
   late Future<AppUpdate?> _updateFuture;
 
   @override
@@ -59,11 +51,19 @@ class _VersionInfoViewState extends State<VersionInfoView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const Text('版本说明', style: _label),
+          Text(
+            '版本说明',
+            style: TextStyle(
+              color: accent.mutedForeground,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 2.2,
+            ),
+          ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             '查看当前版本、更新说明和问题反馈入口。',
-            style: TextStyle(color: AppColors.textTertiary, fontSize: 11.5),
+            style: TextStyle(color: accent.mutedForeground, fontSize: 11.5),
           ),
           const SizedBox(height: 18),
           Container(
@@ -71,8 +71,14 @@ class _VersionInfoViewState extends State<VersionInfoView> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              color: Colors.black.withValues(alpha: 0.20),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+              color: accent.isMonochrome
+                  ? accent.panelSurface
+                  : Colors.black.withValues(alpha: 0.20),
+              border: Border.all(
+                color: accent.foreground.withValues(
+                  alpha: accent.isMonochrome ? .24 : .10,
+                ),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,10 +91,10 @@ class _VersionInfoViewState extends State<VersionInfoView> {
                       color: accent.primary,
                     ),
                     const SizedBox(width: 8),
-                    const Text(
+                    Text(
                       'HoH music',
                       style: TextStyle(
-                        color: Colors.white,
+                        color: accent.foreground,
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                       ),
@@ -106,7 +112,7 @@ class _VersionInfoViewState extends State<VersionInfoView> {
                       ? '当前为 Android 0.0.1 移动端预览版。Bug、功能建议和版本更新将在 GitHub 仓库中维护。'
                       : '当前为 Windows 0.1.0 稳定版。Bug、功能建议和版本更新将在 GitHub 仓库中维护。',
                   style: TextStyle(
-                    color: AppColors.textTertiary,
+                    color: accent.mutedForeground,
                     fontSize: 12,
                     height: 1.6,
                   ),
@@ -165,18 +171,18 @@ class _ContributorsSection extends StatelessWidget {
           contributors.isEmpty
               ? '名单待补充：感谢所有提出建设性功能建议和 Bug 反馈的用户。'
               : '${AppConstants.contributorPlatform}：${contributors.join('、')}',
-          style: const TextStyle(
-            color: AppColors.textTertiary,
+          style: TextStyle(
+            color: accent.mutedForeground,
             fontSize: 11,
             height: 1.6,
           ),
         ),
         if (contributors.isNotEmpty) ...<Widget>[
           const SizedBox(height: 2),
-          const Text(
+          Text(
             '提出建设性功能建议或 Bug 反馈的网友 ID',
             style: TextStyle(
-              color: AppColors.textTertiary,
+              color: accent.mutedForeground,
               fontSize: 10,
               height: 1.5,
             ),
@@ -240,10 +246,7 @@ class _UpdateSection extends StatelessWidget {
             ),
             Text(
               status,
-              style: const TextStyle(
-                color: AppColors.textTertiary,
-                fontSize: 11,
-              ),
+              style: TextStyle(color: accent.mutedForeground, fontSize: 11),
             ),
             if (update != null) ...<Widget>[
               const SizedBox(height: 8),
