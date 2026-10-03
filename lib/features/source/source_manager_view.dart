@@ -41,10 +41,21 @@ import 'source_widgets.dart';
 /// [embedded] = true 时不套外层 `GlassPanel`（设置页自带容器）。
 class SourceManagerPanel extends ConsumerStatefulWidget {
   /// 创建面板。
-  const SourceManagerPanel({super.key, this.embedded = false});
+  const SourceManagerPanel({
+    super.key,
+    this.embedded = false,
+    this.scrollable = false,
+  });
 
   /// 是否嵌在别的页面里。
   final bool embedded;
+
+  /// 是否把整个内容交给外层滚动。
+  ///
+  /// Android 设置页的可用高度远小于桌面端。开启后不再使用桌面页面的
+  /// `Expanded` 结构，而是将说明、操作、缓存和音源列表作为一个整体滚动，
+  /// 避免列表以外的内容溢出到迷你播放器上方。
+  final bool scrollable;
 
   @override
   ConsumerState<SourceManagerPanel> createState() => _SourceManagerViewState();
@@ -53,10 +64,14 @@ class SourceManagerPanel extends ConsumerStatefulWidget {
 /// 「来源 → 音源管理」页面（单独成页时用）。
 class SourceManagerView extends StatelessWidget {
   /// 创建页面。
-  const SourceManagerView({super.key});
+  const SourceManagerView({super.key, this.scrollable = false});
+
+  /// Android 等窄屏页面是否启用整体滚动布局。
+  final bool scrollable;
 
   @override
-  Widget build(BuildContext context) => const SourceManagerPanel();
+  Widget build(BuildContext context) =>
+      SourceManagerPanel(embedded: scrollable, scrollable: scrollable);
 }
 
 class _SourceManagerViewState extends ConsumerState<SourceManagerPanel> {
@@ -405,7 +420,21 @@ class _SourceManagerViewState extends ConsumerState<SourceManagerPanel> {
       ],
     );
 
-    // 嵌进设置页 → 直接给内容；单独成页 → 套一层玻璃面板
+    // Android 窄屏设置页：整个内容一起滚动。这里保留单层玻璃面板，
+    // 避免 LibraryPanel、说明区和音源列表各自建立液态玻璃层后相互采样。
+    if (widget.scrollable) {
+      return GlassPanel(
+        borderRadius: BorderRadius.circular(16),
+        padding: const EdgeInsets.fromLTRB(14, 16, 14, 20),
+        sweep: false,
+        child: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: content,
+        ),
+      );
+    }
+
+    // 嵌进桌面设置页 → 直接给内容；单独成页 → 套一层玻璃面板
     if (widget.embedded) return content;
     return GlassPanel(
       borderRadius: BorderRadius.circular(16),
@@ -918,6 +947,7 @@ class _SourceList extends StatelessWidget {
     }
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 8),
+      primary: false,
       shrinkWrap: true,
       itemCount: sources.length,
       itemBuilder: (BuildContext context, int index) {

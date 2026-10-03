@@ -42,6 +42,7 @@ class MobileAppShell extends ConsumerStatefulWidget {
 class _MobileAppShellState extends ConsumerState<MobileAppShell> {
   int _tab = 0;
   bool _playerExpanded = false;
+  String? _libraryPlaylistId;
 
   static const List<String> _titles = <String>['首页', '发现', '我的', '设置'];
 
@@ -93,9 +94,13 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
       0 => _MobileHomeView(
         onOpenLibrary: () => setState(() => _tab = 2),
         onOpenDiscover: () => setState(() => _tab = 1),
+        onOpenPlaylist: (String id) => setState(() {
+          _libraryPlaylistId = id;
+          _tab = 2;
+        }),
       ),
       1 => const _MobileDiscoverView(),
-      2 => const _MobileLibraryView(),
+      2 => _MobileLibraryView(initialPlaylistId: _libraryPlaylistId),
       _ => const _MobileSettingsView(),
     };
   }
@@ -154,47 +159,65 @@ class _MobileHomeView extends ConsumerWidget {
   const _MobileHomeView({
     required this.onOpenLibrary,
     required this.onOpenDiscover,
+    required this.onOpenPlaylist,
   });
 
   final VoidCallback onOpenLibrary;
   final VoidCallback onOpenDiscover;
+  final ValueChanged<String> onOpenPlaylist;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final PlayerUiState state = ref.watch(playerControllerProvider);
     final Track? track = state.currentTrack;
     final AppAccent accent = AppAccent.of(context);
+    final List<Playlist> playlists =
+        ref.watch(playlistsProvider).value ?? const <Playlist>[];
+    final List<Playlist> customPlaylists = playlists
+        .where((Playlist playlist) => !playlist.isFavorites)
+        .toList(growable: false);
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       children: <Widget>[
         if (track == null)
           _EmptyMobileHome(accent: accent, onOpenDiscover: onOpenDiscover)
-        else ...<Widget>[
-          _MobileWelcomeCard(track: track, accent: accent),
-          const SizedBox(height: 18),
-          const _MobileSectionTitle(title: '快捷入口'),
+        else ...<Widget>[_MobileWelcomeCard(track: track, accent: accent)],
+        const SizedBox(height: 18),
+        const _MobileSectionTitle(title: '快捷入口'),
+        const SizedBox(height: 10),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.favorite_rounded,
+                title: '我喜欢',
+                color: accent.secondary,
+                onTap: onOpenLibrary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.library_music_rounded,
+                title: '本地曲库',
+                color: accent.primary,
+                onTap: onOpenLibrary,
+              ),
+            ),
+          ],
+        ),
+        if (customPlaylists.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 20),
+          const _MobileSectionTitle(title: '我的歌单'),
           const SizedBox(height: 10),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: _QuickAction(
-                  icon: Icons.favorite_rounded,
-                  title: '我喜欢',
-                  color: accent.secondary,
-                  onTap: onOpenLibrary,
-                ),
+          for (final Playlist playlist in customPlaylists)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _HomePlaylistShortcut(
+                playlist: playlist,
+                onTap: () => onOpenPlaylist(playlist.id),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _QuickAction(
-                  icon: Icons.library_music_rounded,
-                  title: '本地曲库',
-                  color: accent.primary,
-                  onTap: onOpenLibrary,
-                ),
-              ),
-            ],
-          ),
+            ),
         ],
       ],
     );
@@ -315,7 +338,9 @@ class _MobileDiscoverView extends StatelessWidget {
 }
 
 class _MobileLibraryView extends ConsumerStatefulWidget {
-  const _MobileLibraryView();
+  const _MobileLibraryView({this.initialPlaylistId});
+
+  final String? initialPlaylistId;
 
   @override
   ConsumerState<_MobileLibraryView> createState() => _MobileLibraryViewState();
@@ -323,6 +348,12 @@ class _MobileLibraryView extends ConsumerStatefulWidget {
 
 class _MobileLibraryViewState extends ConsumerState<_MobileLibraryView> {
   String? _selectedPlaylistId;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedPlaylistId = widget.initialPlaylistId;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -428,6 +459,56 @@ class _PlaylistShortcut extends StatelessWidget {
   }
 }
 
+class _HomePlaylistShortcut extends StatelessWidget {
+  const _HomePlaylistShortcut({required this.playlist, required this.onTap});
+
+  final Playlist playlist;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final AppAccent accent = AppAccent.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: GlassPanel(
+        borderRadius: BorderRadius.circular(16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          children: <Widget>[
+            Icon(Icons.queue_music_rounded, color: accent.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    playlist.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${playlist.length} 首 · 点击打开歌单',
+                    style: const TextStyle(
+                      color: AppColors.textTertiary,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.white.withValues(alpha: 0.6),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MobileSettingsView extends StatefulWidget {
   const _MobileSettingsView();
 
@@ -458,7 +539,7 @@ class _MobileSettingsViewState extends State<_MobileSettingsView> {
       return _MobileSubPage(
         title: '音源管理',
         onBack: () => setState(() => _page = 0),
-        child: const SourceManagerView(),
+        child: const SourceManagerView(scrollable: true),
       );
     }
     if (_page == 4) {

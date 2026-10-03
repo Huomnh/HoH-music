@@ -24,6 +24,7 @@ import 'platforms/windows/lyrics_overlay.dart';
 import 'platforms/windows/smtc_service.dart';
 import 'platforms/windows/tray_service.dart';
 import 'platforms/windows/window_frame.dart';
+import 'platforms/android/android_playback_service.dart';
 import 'shared/constants.dart';
 import 'shared/theme/app_accent.dart';
 import 'shared/theme/app_colors.dart';
@@ -58,6 +59,12 @@ class HoHMusicApp extends ConsumerWidget {
 
     // 启动恢复：按「启动行为」决定是否载入扫描记录并播放
     home = LibraryBootstrap(child: home);
+
+    // Android 播放时使用轻量前台服务保活，切到后台不会因为 Flutter
+    // Activity 暂时不可见而过早回收音频进程；Windows 不经过此层。
+    if (!kIsWeb && Platform.isAndroid) {
+      home = AndroidPlaybackHost(child: home);
+    }
 
     // 调试入口：仅在确实有路径时包一层
     if (debugAutoPlayPaths.isNotEmpty) {

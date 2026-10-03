@@ -456,73 +456,88 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
           const SizedBox(height: 16),
 
           // ── 搜索行 ────────────────────────────────────────────
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.16),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(7),
-              child: Row(
-                children: <Widget>[
-                  Expanded(
-                    child: SourceField(
-                      controller: _keyword,
-                      label: '',
-                      hint: '歌曲、歌手或专辑',
-                      onSubmitted: _busy ? null : _search,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  _Dropdown<String>(
-                    value: _platform,
-                    width: 128,
-                    items: <(String, String)>[
-                      for (final (String, String) o in _platformOptions(host))
-                        o,
-                    ],
-                    onChanged: (String value) {
-                      setState(() => _platform = value);
-                      _persist();
-                      if (_results.isNotEmpty) _search();
-                    },
-                  ),
-                  const SizedBox(width: 6),
-                  _Dropdown<String>(
-                    value: qualityOptions.contains(_quality)
-                        ? _quality
-                        : qualityOptions.first,
-                    width: 112,
-                    items: <(String, String)>[
-                      for (final String q in qualityOptions)
-                        (q, qualityLabel(q)),
-                    ],
-                    onChanged: (String value) {
-                      setState(() => _quality = value);
-                      _persist();
-                    },
-                  ),
-                  const SizedBox(width: 6),
-                  IconButton.filled(
-                    tooltip: '搜索',
-                    onPressed: _busy ? null : _search,
-                    icon: _busy
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.search_rounded, size: 18),
-                    style: IconButton.styleFrom(
-                      backgroundColor: accent.primary.withValues(alpha: 0.9),
-                      foregroundColor: Colors.white,
-                      fixedSize: const Size(42, 42),
-                    ),
-                  ),
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final bool compact = constraints.maxWidth < 430;
+              final Widget keyword = SourceField(
+                controller: _keyword,
+                label: '',
+                hint: '歌曲、歌手或专辑',
+                onSubmitted: _busy ? null : _search,
+              );
+              final Widget platform = _Dropdown<String>(
+                value: _platform,
+                width: compact ? null : 128,
+                items: <(String, String)>[
+                  for (final (String, String) o in _platformOptions(host)) o,
                 ],
-              ),
-            ),
+                onChanged: (String value) {
+                  setState(() => _platform = value);
+                  _persist();
+                  if (_results.isNotEmpty) _search();
+                },
+              );
+              final Widget quality = _Dropdown<String>(
+                value: qualityOptions.contains(_quality)
+                    ? _quality
+                    : qualityOptions.first,
+                width: compact ? null : 112,
+                items: <(String, String)>[
+                  for (final String q in qualityOptions) (q, qualityLabel(q)),
+                ],
+                onChanged: (String value) {
+                  setState(() => _quality = value);
+                  _persist();
+                },
+              );
+              final Widget searchButton = IconButton.filled(
+                tooltip: '搜索',
+                onPressed: _busy ? null : _search,
+                icon: _busy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.search_rounded, size: 18),
+                style: IconButton.styleFrom(
+                  backgroundColor: accent.primary.withValues(alpha: 0.9),
+                  foregroundColor: Colors.white,
+                  fixedSize: const Size(42, 42),
+                ),
+              );
+
+              // 手机宽度不足以容纳输入框 + 两个下拉框 + 搜索按钮，
+              // 输入框独占一行，筛选项放到第二行并平均分配宽度。
+              if (compact) {
+                return Column(
+                  children: <Widget>[
+                    keyword,
+                    const SizedBox(height: 6),
+                    Row(
+                      children: <Widget>[
+                        Expanded(child: platform),
+                        const SizedBox(width: 6),
+                        Expanded(child: quality),
+                        const SizedBox(width: 6),
+                        searchButton,
+                      ],
+                    ),
+                  ],
+                );
+              }
+              return Row(
+                children: <Widget>[
+                  Expanded(child: keyword),
+                  const SizedBox(width: 6),
+                  platform,
+                  const SizedBox(width: 6),
+                  quality,
+                  const SizedBox(width: 6),
+                  searchButton,
+                ],
+              );
+            },
           ),
 
           if (_status.isNotEmpty) ...<Widget>[
@@ -715,7 +730,7 @@ class _Dropdown<T> extends StatelessWidget {
   final T value;
   final List<(T, String)> items;
   final ValueChanged<T> onChanged;
-  final double width;
+  final double? width;
 
   @override
   Widget build(BuildContext context) {
