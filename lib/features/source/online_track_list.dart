@@ -193,6 +193,10 @@ class _OnlineTrackRowState extends ConsumerState<OnlineTrackRow> {
     final OnlineTrack track = widget.track;
     final bool liked = ref.watch(isFavoriteProvider(track.id));
     final Uint8List? cover = ref.watch(onlineCoverProvider(track.id)).value;
+    final String subtitle = <String>[
+      if (track.artist.isNotEmpty) track.artist,
+      if (track.album.isNotEmpty && !compact) track.album,
+    ].join(' · ');
     // 正在播这首就高亮（和曲库列表一致的观感）
     final bool playing =
         widget.playing ||
@@ -211,7 +215,10 @@ class _OnlineTrackRowState extends ConsumerState<OnlineTrackRow> {
         onTap: _busy ? null : _play,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 140),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 7 : 10,
+            vertical: compact ? 6 : 8,
+          ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(13),
             color: playing
@@ -236,8 +243,12 @@ class _OnlineTrackRowState extends ConsumerState<OnlineTrackRow> {
                     ),
                   ),
                 ),
-              SourceCover(bytes: cover, fallbackUrl: track.coverUrl, size: 46),
-              const SizedBox(width: 10),
+              SourceCover(
+                bytes: cover,
+                fallbackUrl: track.coverUrl,
+                size: compact ? 42 : 46,
+              ),
+              SizedBox(width: compact ? 7 : 10),
               Expanded(
                 flex: compact ? 1 : 5,
                 child: Column(
@@ -255,28 +266,27 @@ class _OnlineTrackRowState extends ConsumerState<OnlineTrackRow> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      <String>[
-                        if (track.artist.isNotEmpty) track.artist,
-                        if (track.album.isNotEmpty) track.album,
-                        if ((widget.quality ?? '').isNotEmpty)
-                          qualityLabel(widget.quality!),
-                      ].join(' · '),
+                      subtitle.isEmpty ? '未知歌手' : subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Color(0x99FFFFFF),
-                        fontSize: 11,
+                        fontSize: compact ? 10.5 : 11,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                _formatDuration(track.duration),
-                style: const TextStyle(color: Color(0x99FFFFFF), fontSize: 11),
-              ),
-              const SizedBox(width: 4),
+              SizedBox(width: compact ? 4 : 8),
+              if (!compact)
+                Text(
+                  _formatDuration(track.duration),
+                  style: const TextStyle(
+                    color: Color(0x99FFFFFF),
+                    fontSize: 11,
+                  ),
+                ),
+              if (!compact) const SizedBox(width: 4),
               IconButton(
                 tooltip: liked ? '取消喜欢' : '加入我的喜欢',
                 onPressed: _toggleFavorite,
@@ -310,7 +320,7 @@ class _OnlineTrackRowState extends ConsumerState<OnlineTrackRow> {
                   ),
                 ),
               ],
-              const SizedBox(width: 2),
+              SizedBox(width: compact ? 0 : 2),
               if (_busy)
                 const SizedBox(
                   width: 18,

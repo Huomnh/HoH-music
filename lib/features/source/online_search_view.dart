@@ -320,20 +320,10 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
     }
     if (outcome.note.isNotEmpty && count > 0) parts.add(outcome.note);
 
-    // 在线播放靠"支持该平台的音源"，提前把可用情况讲清楚
-    if (count > 0) {
-      final Set<String> resultPlatforms = outcome.tracks
-          .map((OnlineTrack t) => t.platform)
-          .toSet();
-      for (final String p in resultPlatforms) {
-        parts.add(host.describePlatformSummary(p));
-      }
-      if (host.isEmpty) {
-        parts.add(
-          '⚠️ 还没有可用音源：去「音源管理」导入并加载脚本，'
-          '否则只能看信息，不能播放；请先在「音源管理」启用对应平台音源',
-        );
-      }
+    // 手机端不再把每个平台的详细统计堆在结果列表上方，避免歌曲列表
+    // 只剩一两行。平台选择仍保留在筛选框里，播放失败时再给出具体提示。
+    if (count > 0 && host.isEmpty) {
+      parts.add('暂无已启用音源，当前可查看歌曲信息；播放前请到音源管理导入脚本');
     }
     if (platforms.length == 1 && !host.platforms.contains(platforms.first)) {
       parts.add(
@@ -391,6 +381,9 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
   @override
   Widget build(BuildContext context) {
     final AppAccent accent = AppAccent.of(context);
+    final Size viewport = MediaQuery.sizeOf(context);
+    final bool compact = viewport.width < 600;
+    final bool shortViewport = viewport.height < 760;
     final SourceHostState host =
         ref.watch(sourceHostProvider).value ?? const SourceHostState();
     final List<String> qualityOptions = _qualityOptions(host);
@@ -404,7 +397,12 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
 
     return GlassPanel(
       borderRadius: BorderRadius.circular(16),
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 12 : 18,
+        compact ? 12 : 16,
+        compact ? 12 : 18,
+        compact ? 8 : 14,
+      ),
       initialSweepPhase: 0.1,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -456,7 +454,7 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: compact ? 9 : 16),
 
           // ── 搜索行 ────────────────────────────────────────────
           LayoutBuilder(
@@ -550,7 +548,8 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
               text: _status,
               ok: _statusOk,
               busy: _busy,
-              maxLines: MediaQuery.sizeOf(context).width < 600 ? 4 : null,
+              // 搜索状态只保留一小段摘要；平台明细不再堆在结果区上方。
+              maxLines: compact ? (shortViewport ? 1 : 2) : null,
             ),
           ],
           if (_busy && _progressTotal > 0) ...<Widget>[
@@ -577,7 +576,7 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
             ),
           ],
 
-          const SizedBox(height: 14),
+          SizedBox(height: compact ? 7 : 14),
           Row(
             children: <Widget>[
               Text(
@@ -609,7 +608,7 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
               ),
             ],
           ),
-          const Divider(color: AppColors.divider, height: 8),
+          const Divider(color: AppColors.divider, height: 6),
 
           // ── 结果 ─────────────────────────────────────────────
           Expanded(

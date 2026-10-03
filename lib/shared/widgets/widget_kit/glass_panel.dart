@@ -196,24 +196,14 @@ class _GlassPanelState extends State<GlassPanel> {
     final Widget material = defaultTargetPlatform == TargetPlatform.android
         ? ClipRRect(
             borderRadius: widget.borderRadius,
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: const Color(0xD9141A2C),
-                  borderRadius: widget.borderRadius,
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: .18),
-                  ),
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: <Color>[Color(0xCC29344E), Color(0xD9141A2C)],
-                  ),
-                ),
-                child: panelContent,
-              ),
-            ),
+            child: widget.blurEnabled
+                ? BackdropFilter(
+                    // sigma 6 保留层次但比桌面玻璃轻，避免多个手机面板
+                    // 同时采样背景时造成明显 GPU 压力。
+                    filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                    child: _androidTintedSurface(panelContent),
+                  )
+                : _androidTintedSurface(panelContent),
           )
         : LiquidGlass.withOwnLayer(
             settings: settings,
@@ -243,6 +233,22 @@ class _GlassPanelState extends State<GlassPanel> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _androidTintedSurface(Widget child) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xD9141A2C),
+        borderRadius: widget.borderRadius,
+        border: Border.all(color: Colors.white.withValues(alpha: .18)),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Color(0xCC29344E), Color(0xD9141A2C)],
+        ),
+      ),
+      child: child,
     );
   }
 }

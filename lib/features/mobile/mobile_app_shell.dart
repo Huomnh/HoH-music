@@ -8,6 +8,7 @@
 library;
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -1105,106 +1106,137 @@ class _MobileNowPlaying extends ConsumerWidget {
             Expanded(
               child: track == null
                   ? const Center(child: Text('队列是空的'))
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(26, 18, 26, 28),
-                      child: Column(
-                        children: <Widget>[
-                          const SizedBox(height: 12),
-                          const CoverStage(size: 290),
-                          const SizedBox(height: 24),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              track.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 23,
-                                fontWeight: FontWeight.w700,
-                              ),
+                  : LayoutBuilder(
+                      builder: (BuildContext context, BoxConstraints size) {
+                        final bool compact = size.maxHeight < 680;
+                        final double coverSize = math.max(
+                          112,
+                          math.min(
+                            290,
+                            math.min(
+                              size.maxWidth - 44,
+                              size.maxHeight * (compact ? .25 : .31),
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              '${track.artist} · ${track.album}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: accent.primary),
-                            ),
+                        );
+                        final String subtitle = <String>[
+                          if (track.artist.trim().isNotEmpty) track.artist,
+                          if (track.album.trim().isNotEmpty) track.album,
+                        ].join(' · ');
+                        return Padding(
+                          padding: EdgeInsets.fromLTRB(
+                            20,
+                            compact ? 4 : 12,
+                            20,
+                            compact ? 8 : 18,
                           ),
-                          const SizedBox(height: 20),
-                          const SizedBox(
-                            height: 220,
-                            child: AndroidKaraokeLyrics(),
-                          ),
-                          const SizedBox(height: 10),
-                          _MobileProgress(),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          child: Column(
                             children: <Widget>[
-                              IconButton(
-                                tooltip: '加入喜欢',
-                                onPressed: () => ref
-                                    .read(playlistsProvider.notifier)
-                                    .toggleFavorite(track.id),
-                                icon: Icon(
-                                  ref.watch(isFavoriteProvider(track.id))
-                                      ? Icons.favorite_rounded
-                                      : Icons.favorite_border_rounded,
-                                ),
-                                style: IconButton.styleFrom(
-                                  side: BorderSide(
-                                    color: accent.primary.withValues(
-                                      alpha: 0.65,
-                                    ),
+                              SizedBox(height: compact ? 4 : 10),
+                              CoverStage(size: coverSize),
+                              SizedBox(height: compact ? 8 : 14),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  track.title.trim().isEmpty
+                                      ? '（未知曲名）'
+                                      : track.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: compact ? 20 : 23,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ),
-                              IconButton(
-                                tooltip: '上一首',
-                                onPressed: () =>
-                                    stepPendingPlaylist(ref, delta: -1),
-                                icon: const Icon(Icons.skip_previous_rounded),
-                                iconSize: 34,
-                              ),
-                              IconButton.filled(
-                                onPressed: controller.togglePlayPause,
-                                icon: Icon(
-                                  state.playing
-                                      ? Icons.pause_rounded
-                                      : Icons.play_arrow_rounded,
-                                ),
-                                iconSize: 34,
-                                style: IconButton.styleFrom(
-                                  fixedSize: const Size(68, 68),
+                              const SizedBox(height: 4),
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  subtitle.isEmpty ? '未知歌手' : subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: accent.primary),
                                 ),
                               ),
-                              IconButton(
-                                tooltip: '下一首',
-                                onPressed: () =>
-                                    stepPendingPlaylist(ref, delta: 1),
-                                icon: const Icon(Icons.skip_next_rounded),
-                                iconSize: 34,
+                              SizedBox(height: compact ? 4 : 8),
+                              const Expanded(
+                                child: ClipRect(
+                                  child: Center(child: AndroidKaraokeLyrics()),
+                                ),
                               ),
-                              IconButton(
-                                tooltip: '播放列表',
-                                onPressed: () => _showMobileQueue(context, ref),
-                                icon: const Icon(Icons.queue_music_rounded),
-                                style: IconButton.styleFrom(
-                                  side: BorderSide(
-                                    color: accent.primary.withValues(
-                                      alpha: 0.65,
+                              const SizedBox(height: 4),
+                              const _MobileProgress(),
+                              SizedBox(height: compact ? 2 : 10),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: <Widget>[
+                                  IconButton(
+                                    tooltip: '加入喜欢',
+                                    onPressed: () => ref
+                                        .read(playlistsProvider.notifier)
+                                        .toggleFavorite(track.id),
+                                    icon: Icon(
+                                      ref.watch(isFavoriteProvider(track.id))
+                                          ? Icons.favorite_rounded
+                                          : Icons.favorite_border_rounded,
+                                    ),
+                                    style: IconButton.styleFrom(
+                                      side: BorderSide(
+                                        color: accent.primary.withValues(
+                                          alpha: 0.65,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
+                                  IconButton(
+                                    tooltip: '上一首',
+                                    onPressed: () =>
+                                        stepPendingPlaylist(ref, delta: -1),
+                                    icon: const Icon(
+                                      Icons.skip_previous_rounded,
+                                    ),
+                                    iconSize: 34,
+                                  ),
+                                  IconButton.filled(
+                                    onPressed: controller.togglePlayPause,
+                                    icon: Icon(
+                                      state.playing
+                                          ? Icons.pause_rounded
+                                          : Icons.play_arrow_rounded,
+                                    ),
+                                    iconSize: 34,
+                                    style: IconButton.styleFrom(
+                                      fixedSize: const Size(68, 68),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    tooltip: '下一首',
+                                    onPressed: () =>
+                                        stepPendingPlaylist(ref, delta: 1),
+                                    icon: const Icon(Icons.skip_next_rounded),
+                                    iconSize: 34,
+                                  ),
+                                  IconButton(
+                                    tooltip: '播放列表',
+                                    onPressed: () =>
+                                        _showMobileQueue(context, ref),
+                                    icon: const Icon(Icons.queue_music_rounded),
+                                    style: IconButton.styleFrom(
+                                      side: BorderSide(
+                                        color: accent.primary.withValues(
+                                          alpha: 0.65,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     ),
             ),
           ],
