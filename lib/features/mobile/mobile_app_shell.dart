@@ -414,9 +414,9 @@ class _MobileWelcomeCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 5),
+            const SizedBox(height: 14),
             const _WelcomeProgress(),
-            const SizedBox(height: 5),
+            const SizedBox(height: 8),
             SizedBox(
               height: 84,
               child: ClipRect(
@@ -444,16 +444,59 @@ class _WelcomeProgress extends ConsumerWidget {
     final double value = total <= 0
         ? 0
         : (position.inMilliseconds / total).clamp(0.0, 1.0);
+    final PlayerController controller = ref.read(
+      playerControllerProvider.notifier,
+    );
     return ClipRRect(
-      borderRadius: BorderRadius.circular(2),
-      child: LinearProgressIndicator(
-        value: value,
-        minHeight: 3,
-        backgroundColor: accent.mutedForeground.withValues(alpha: .22),
-        valueColor: AlwaysStoppedAnimation<Color>(accent.primary),
+      borderRadius: BorderRadius.circular(8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+              activeTrackColor: accent.primary,
+              inactiveTrackColor: accent.mutedForeground.withValues(alpha: .22),
+              thumbColor: accent.primary,
+              overlayColor: accent.primary.withValues(alpha: .18),
+            ),
+            child: Slider(
+              value: value,
+              min: 0,
+              max: total > 0 ? total : 1,
+              onChanged: total <= 0
+                  ? null
+                  : (double next) =>
+                        controller.seek(Duration(milliseconds: next.round())),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                Text(
+                  _formatWelcomeDuration(position),
+                  style: TextStyle(color: accent.mutedForeground, fontSize: 10),
+                ),
+                Text(
+                  _formatWelcomeDuration(state.duration),
+                  style: TextStyle(color: accent.mutedForeground, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+String _formatWelcomeDuration(Duration value) {
+  if (value <= Duration.zero) return '--:--';
+  return '${value.inMinutes.toString().padLeft(2, '0')}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
 }
 
 class _MobileDiscoverView extends StatelessWidget {
