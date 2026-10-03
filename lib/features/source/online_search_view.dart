@@ -35,7 +35,10 @@ const int _kPageSize = 30;
 /// 在线搜索页。
 class OnlineSearchView extends ConsumerStatefulWidget {
   /// 创建页面。
-  const OnlineSearchView({super.key});
+  const OnlineSearchView({super.key, this.autoFocus = false});
+
+  /// 移动端从首页快捷搜索进入时，直接把输入焦点交给关键词框。
+  final bool autoFocus;
 
   @override
   ConsumerState<OnlineSearchView> createState() => _OnlineSearchViewState();
@@ -464,6 +467,7 @@ class _OnlineSearchViewState extends ConsumerState<OnlineSearchView> {
                 label: '',
                 hint: '歌曲、歌手或专辑',
                 onSubmitted: _busy ? null : _search,
+                autofocus: widget.autoFocus,
               );
               final Widget platform = _Dropdown<String>(
                 value: _platform,

@@ -164,6 +164,8 @@ class ThemeBundle {
     BackgroundKind.liquidBloom => 'liquid_bloom',
     BackgroundKind.deepTide => 'deep_tide',
     BackgroundKind.inkFold => 'ink_fold',
+    BackgroundKind.monochromeDark => 'monochrome_dark',
+    BackgroundKind.monochromeLight => 'monochrome_light',
     BackgroundKind.custom => 'custom',
   };
 

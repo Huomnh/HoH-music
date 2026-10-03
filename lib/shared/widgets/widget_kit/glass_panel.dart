@@ -142,7 +142,10 @@ class _GlassPanelState extends State<GlassPanel> {
   GlassSweepAnimation? _sweep;
 
   bool get _wantsSweep =>
-      widget.sweep && widget.showSweepAt && widget.glowOpacity > 0;
+      defaultTargetPlatform != TargetPlatform.android &&
+      widget.sweep &&
+      widget.showSweepAt &&
+      widget.glowOpacity > 0;
 
   @override
   void initState() {
@@ -178,19 +181,32 @@ class _GlassPanelState extends State<GlassPanel> {
       config,
       enabled: widget.blurEnabled,
     );
-    final material = LiquidGlass.withOwnLayer(
-      settings: settings,
-      shape: LiquidRoundedSuperellipse(
-        borderRadius: widget.borderRadius.topLeft.x,
-      ),
-      child: ClipRRect(
-        borderRadius: widget.borderRadius,
-        child: RepaintBoundary(
-          key: const ValueKey<String>('glass-panel-content'),
-          child: Padding(padding: widget.padding, child: widget.child),
-        ),
+    final Widget panelContent = ClipRRect(
+      borderRadius: widget.borderRadius,
+      child: RepaintBoundary(
+        key: const ValueKey<String>('glass-panel-content'),
+        child: Padding(padding: widget.padding, child: widget.child),
       ),
     );
+    // liquid_glass_plus 在 Android 窄屏上叠加多个滚动内容时会重复采样
+    // 下方图层，表现为内容折射错位、滚动时闪动。移动端采用稳定的实体
+    // 半透明面板，保留圆角和边框层次，同时显著减少 GPU 重绘。
+    final Widget material = defaultTargetPlatform == TargetPlatform.android
+        ? DecoratedBox(
+            decoration: BoxDecoration(
+              color: const Color(0xD9141A2C),
+              borderRadius: widget.borderRadius,
+              border: Border.all(color: Colors.white.withValues(alpha: .16)),
+            ),
+            child: panelContent,
+          )
+        : LiquidGlass.withOwnLayer(
+            settings: settings,
+            shape: LiquidRoundedSuperellipse(
+              borderRadius: widget.borderRadius.topLeft.x,
+            ),
+            child: panelContent,
+          );
     final sweep = _sweep;
     if (sweep == null) return material;
     return Stack(

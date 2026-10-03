@@ -6,6 +6,33 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+/// Android / 低性能设备的静态黑白背景，不启动计时器或 CustomPainter。
+class MonochromeScene extends StatelessWidget {
+  const MonochromeScene({super.key, required this.light});
+
+  final bool light;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Color> colors = light
+        ? const <Color>[Color(0xFFF8F8F8), Color(0xFFE8E8E8), Color(0xFFFFFFFF)]
+        : const <Color>[
+            Color(0xFF050505),
+            Color(0xFF171717),
+            Color(0xFF000000),
+          ];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+        ),
+      ),
+    );
+  }
+}
+
 /// 液态流光：三团低饱和渐变光缓慢漂移，约 8.3fps。
 class LiquidBloomScene extends StatefulWidget {
   const LiquidBloomScene({

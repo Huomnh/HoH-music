@@ -96,6 +96,18 @@ class AppAccent {
         tertiary: Color(0xFFED86B8),
         source: '墨潮折影',
       ),
+      BackgroundKind.monochromeDark => const AppAccent(
+        primary: Color(0xFFEAEAEA),
+        secondary: Color(0xFFB8B8B8),
+        tertiary: Color(0xFFFFFFFF),
+        source: '墨白极简',
+      ),
+      BackgroundKind.monochromeLight => const AppAccent(
+        primary: Color(0xFF202020),
+        secondary: Color(0xFF585858),
+        tertiary: Color(0xFF000000),
+        source: '白墨极简',
+      ),
       // 自定义图片：先用液态流光色，等提取结果回来再替换
       BackgroundKind.custom => const AppAccent(
         primary: Color(0xFF7C8CFF),

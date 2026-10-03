@@ -36,6 +36,12 @@ enum BackgroundKind {
   /// 墨潮折影：多层流体墨带缓慢交叠，避开粒子与光球构图。
   inkFold('墨潮折影', '靛青与青绿墨带缓慢折叠流动'),
 
+  /// 墨白极简：静态黑底白光，适合低性能 Android 设备。
+  monochromeDark('墨白极简', '黑底白光的低负载简约背景'),
+
+  /// 白墨极简：静态白底黑墨，适合喜欢明亮简洁界面的用户。
+  monochromeLight('白墨极简', '白底黑墨的低负载简约背景'),
+
   /// 自定义图片。
   custom('自定义图片', '从本地选一张图片');
 
@@ -72,6 +78,20 @@ Map<String, Object?> builtInBackgroundDefinition(BackgroundKind kind) {
       'renderer': 'ink-fold',
       'speed': 0.42,
       'colors': <String>['0xFF172341', '0xFF286D78', '0xFF8A4268'],
+    },
+    BackgroundKind.monochromeDark => <String, Object?>{
+      'format': 'hoh-background',
+      'version': 1,
+      'renderer': 'monochrome-dark',
+      'speed': 0.0,
+      'colors': <String>['0xFF050505', '0xFF1C1C1C', '0xFF8C8C8C'],
+    },
+    BackgroundKind.monochromeLight => <String, Object?>{
+      'format': 'hoh-background',
+      'version': 1,
+      'renderer': 'monochrome-light',
+      'speed': 0.0,
+      'colors': <String>['0xFFF8F8F8', '0xFFE4E4E4', '0xFF303030'],
     },
     BackgroundKind.custom => <String, Object?>{},
   };
@@ -314,6 +334,8 @@ class BackgroundLayer extends StatelessWidget {
             selection.dynamicDefinition ??
             builtInBackgroundDefinition(BackgroundKind.inkFold),
       ),
+      BackgroundKind.monochromeDark => const MonochromeScene(light: false),
+      BackgroundKind.monochromeLight => const MonochromeScene(light: true),
       BackgroundKind.custom => LiquidBloomScene(
         animated: animated,
         definition: selection.dynamicDefinition,
@@ -330,7 +352,11 @@ class BackgroundLayer extends StatelessWidget {
         IgnorePointer(
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.12),
+              color: Colors.black.withValues(
+                alpha: selection.effectiveKind == BackgroundKind.monochromeLight
+                    ? 0.03
+                    : 0.12,
+              ),
             ),
           ),
         ),

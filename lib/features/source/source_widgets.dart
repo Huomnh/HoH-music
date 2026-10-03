@@ -43,6 +43,7 @@ class SourceField extends StatelessWidget {
     required this.hint,
     this.obscure = false,
     this.onSubmitted,
+    this.autofocus = false,
   });
 
   /// 控制器。
@@ -60,10 +61,14 @@ class SourceField extends StatelessWidget {
   /// 回车回调（搜索框用）。
   final VoidCallback? onSubmitted;
 
+  /// 是否在进入页面时自动获得焦点。
+  final bool autofocus;
+
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      autofocus: autofocus,
       obscureText: obscure,
       onSubmitted: onSubmitted == null ? null : (_) => onSubmitted!(),
       style: const TextStyle(color: Colors.white, fontSize: 12.5),

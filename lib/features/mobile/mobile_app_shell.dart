@@ -17,13 +17,15 @@ import '../../core/audio/player_providers.dart';
 import '../../core/metadata/cover_art.dart';
 import '../library/library_views.dart';
 import '../library/playlists.dart';
+import '../library/playlist_transfer.dart';
 import '../player/appearance_settings.dart';
 import '../player/cover_stage.dart';
 import '../player/playback_settings.dart';
 import '../player/version_info_view.dart';
-import '../player/lyrics/lyrics_view.dart';
+import '../player/lyrics/lyrics_style.dart';
 import '../source/online_search_view.dart';
 import '../source/source_manager_view.dart';
+import 'android_karaoke_lyrics.dart';
 import '../../shared/constants.dart';
 import '../../shared/theme/app_accent.dart';
 import '../../shared/theme/app_background.dart';
@@ -43,6 +45,7 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
   int _tab = 0;
   bool _playerExpanded = false;
   String? _libraryPlaylistId;
+  bool _focusDiscoverSearch = false;
 
   static const List<String> _titles = <String>['首页', '发现', '我的', '设置'];
 
@@ -93,19 +96,40 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
     return switch (_tab) {
       0 => _MobileHomeView(
         onOpenLibrary: () => setState(() => _tab = 2),
-        onOpenDiscover: () => setState(() => _tab = 1),
+        onOpenDiscover: () => setState(() {
+          _tab = 1;
+          _focusDiscoverSearch = true;
+        }),
+        onOpenSearch: () => setState(() {
+          _tab = 1;
+          _focusDiscoverSearch = true;
+        }),
+        onImportPlaylist: _importPlaylist,
         onOpenPlaylist: (String id) => setState(() {
           _libraryPlaylistId = id;
           _tab = 2;
         }),
       ),
-      1 => const _MobileDiscoverView(),
+      1 => _MobileDiscoverView(focusSearch: _focusDiscoverSearch),
       2 => _MobileLibraryView(initialPlaylistId: _libraryPlaylistId),
       _ => const _MobileSettingsView(),
     };
   }
 
   void _openPlayer() => setState(() => _playerExpanded = true);
+
+  Future<void> _importPlaylist() async {
+    try {
+      final PlaylistTransferResult? result = await importPlaylist(context, ref);
+      if (!mounted || result == null) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('已导入「${result.playlistName}」')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('导入失败：$error')));
+    }
+  }
 }
 
 class _MobileTopBar extends StatelessWidget {
@@ -160,11 +184,15 @@ class _MobileHomeView extends ConsumerWidget {
     required this.onOpenLibrary,
     required this.onOpenDiscover,
     required this.onOpenPlaylist,
+    required this.onOpenSearch,
+    required this.onImportPlaylist,
   });
 
   final VoidCallback onOpenLibrary;
   final VoidCallback onOpenDiscover;
   final ValueChanged<String> onOpenPlaylist;
+  final VoidCallback onOpenSearch;
+  final VoidCallback onImportPlaylist;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -202,6 +230,28 @@ class _MobileHomeView extends ConsumerWidget {
                 title: '本地曲库',
                 color: accent.primary,
                 onTap: onOpenLibrary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.search_rounded,
+                title: '快捷搜索',
+                color: accent.primary,
+                onTap: onOpenSearch,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _QuickAction(
+                icon: Icons.file_upload_outlined,
+                title: '导入歌单',
+                color: accent.secondary,
+                onTap: onImportPlaylist,
               ),
             ),
           ],
@@ -326,13 +376,15 @@ class _MobileWelcomeCard extends StatelessWidget {
 }
 
 class _MobileDiscoverView extends StatelessWidget {
-  const _MobileDiscoverView();
+  const _MobileDiscoverView({this.focusSearch = false});
+
+  final bool focusSearch;
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
+    return Padding(
       padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
-      child: OnlineSearchView(),
+      child: OnlineSearchView(autoFocus: focusSearch),
     );
   }
 }
@@ -348,6 +400,7 @@ class _MobileLibraryView extends ConsumerStatefulWidget {
 
 class _MobileLibraryViewState extends ConsumerState<_MobileLibraryView> {
   String? _selectedPlaylistId;
+  bool _showAllSongs = false;
 
   @override
   void initState() {
@@ -384,74 +437,188 @@ class _MobileLibraryViewState extends ConsumerState<_MobileLibraryView> {
         ],
       );
     }
+    if (_showAllSongs) {
+      return Column(
+        children: <Widget>[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _showAllSongs = false),
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('返回我的歌单'),
+            ),
+          ),
+          const Expanded(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: AllSongsView(),
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       children: <Widget>[
-        SizedBox(
-          height: 92,
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            scrollDirection: Axis.horizontal,
-            itemCount: playlists.length,
-            separatorBuilder: (_, _) => const SizedBox(width: 10),
-            itemBuilder: (BuildContext context, int index) {
-              final Playlist playlist = playlists[index];
-              return _PlaylistShortcut(
-                playlist: playlist,
-                onTap: () => setState(() => _selectedPlaylistId = playlist.id),
-              );
-            },
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Row(
+            children: <Widget>[
+              const Expanded(
+                child: Text(
+                  '我的歌单',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
+              ),
+              IconButton(
+                tooltip: '新建歌单',
+                onPressed: _createPlaylist,
+                icon: const Icon(Icons.add_rounded),
+              ),
+              IconButton(
+                tooltip: '导入歌单',
+                onPressed: _importPlaylist,
+                icon: const Icon(Icons.file_upload_outlined),
+              ),
+            ],
           ),
         ),
-        const Expanded(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: AllSongsView(),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+            children: <Widget>[
+              for (final Playlist playlist in playlists)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _LargePlaylistCard(
+                    playlist: playlist,
+                    onTap: () =>
+                        setState(() => _selectedPlaylistId = playlist.id),
+                  ),
+                ),
+              _LargePlaylistCard(
+                playlist: const Playlist(id: 'all-songs', name: '所有歌曲'),
+                icon: Icons.library_music_rounded,
+                onTap: () => setState(() => _showAllSongs = true),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
+
+  Future<void> _createPlaylist() async {
+    final TextEditingController controller = TextEditingController();
+    final String? name = await showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('新建歌单'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 40,
+          decoration: const InputDecoration(hintText: '歌单名称'),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || name == null || name.trim().isEmpty) return;
+    final Playlist playlist = await ref
+        .read(playlistsProvider.notifier)
+        .create(name);
+    if (mounted) setState(() => _selectedPlaylistId = playlist.id);
+  }
+
+  Future<void> _importPlaylist() async {
+    try {
+      final PlaylistTransferResult? result = await importPlaylist(context, ref);
+      if (!mounted || result == null) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('已导入「${result.playlistName}」')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('导入失败：$error')));
+    }
+  }
 }
 
-class _PlaylistShortcut extends StatelessWidget {
-  const _PlaylistShortcut({required this.playlist, required this.onTap});
+class _LargePlaylistCard extends StatelessWidget {
+  const _LargePlaylistCard({
+    required this.playlist,
+    required this.onTap,
+    this.icon,
+  });
 
   final Playlist playlist;
   final VoidCallback onTap;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context) {
     final AppAccent accent = AppAccent.of(context);
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: GlassPanel(
-        borderRadius: BorderRadius.circular(16),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        borderRadius: BorderRadius.circular(20),
+        padding: const EdgeInsets.all(16),
+        child: Row(
           children: <Widget>[
-            Icon(
-              playlist.isFavorites
-                  ? Icons.favorite_rounded
-                  : Icons.queue_music_rounded,
-              size: 20,
-              color: accent.primary,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              playlist.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11),
-            ),
-            Text(
-              '${playlist.length} 首',
-              style: const TextStyle(
-                color: AppColors.textTertiary,
-                fontSize: 10,
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: accent.primary.withValues(alpha: .16),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: SizedBox(
+                width: 64,
+                height: 64,
+                child: Icon(
+                  icon ??
+                      (playlist.isFavorites
+                          ? Icons.favorite_rounded
+                          : Icons.queue_music_rounded),
+                  color: accent.primary,
+                  size: 30,
+                ),
               ),
             ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    playlist.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${playlist.length} 首歌曲 · 点击打开',
+                    style: const TextStyle(
+                      color: AppColors.textTertiary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: accent.primary),
           ],
         ),
       ),
@@ -469,6 +636,7 @@ class _HomePlaylistShortcut extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppAccent accent = AppAccent.of(context);
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: GlassPanel(
         borderRadius: BorderRadius.circular(16),
@@ -825,7 +993,7 @@ class _MobileNowPlaying extends ConsumerWidget {
                           const SizedBox(height: 20),
                           const SizedBox(
                             height: 220,
-                            child: LyricsPanel(centered: true),
+                            child: AndroidKaraokeLyrics(),
                           ),
                           const SizedBox(height: 10),
                           _MobileProgress(),
@@ -857,6 +1025,17 @@ class _MobileNowPlaying extends ConsumerWidget {
                               ),
                             ],
                           ),
+                          const SizedBox(height: 12),
+                          _MobileNowPlayingActions(
+                            track: track,
+                            onQueue: () => _showMobileQueue(
+                              context,
+                              ref,
+                              state,
+                              controller,
+                            ),
+                            onModes: () => _showMobileLyricsModes(context, ref),
+                          ),
                         ],
                       ),
                     ),
@@ -866,6 +1045,137 @@ class _MobileNowPlaying extends ConsumerWidget {
       ),
     );
   }
+}
+
+class _MobileNowPlayingActions extends ConsumerWidget {
+  const _MobileNowPlayingActions({
+    required this.track,
+    required this.onQueue,
+    required this.onModes,
+  });
+
+  final Track track;
+  final VoidCallback onQueue;
+  final VoidCallback onModes;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final AppAccent accent = AppAccent.of(context);
+    final bool favorite = ref.watch(isFavoriteProvider(track.id));
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        OutlinedButton.icon(
+          onPressed: () =>
+              ref.read(playlistsProvider.notifier).toggleFavorite(track.id),
+          icon: Icon(
+            favorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            color: favorite ? accent.secondary : null,
+          ),
+          label: Text(favorite ? '已喜欢' : '加入喜欢'),
+        ),
+        const SizedBox(width: 10),
+        OutlinedButton.icon(
+          onPressed: onQueue,
+          icon: const Icon(Icons.queue_music_rounded),
+          label: const Text('播放列表'),
+        ),
+        const SizedBox(width: 10),
+        IconButton(
+          tooltip: '歌词模式',
+          onPressed: onModes,
+          icon: const Icon(Icons.lyrics_rounded),
+        ),
+      ],
+    );
+  }
+}
+
+Future<void> _showMobileLyricsModes(BuildContext context, WidgetRef ref) async {
+  final LyricsStyle style =
+      ref.read(lyricsStyleProvider).value ?? const LyricsStyle();
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    builder: (BuildContext sheetContext) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: <Widget>[
+          const ListTile(
+            title: Text('选择歌词视觉模式'),
+            subtitle: Text('安卓端默认使用轻量逐字效果，降低资源占用'),
+          ),
+          for (final LyricsLayoutMode mode in LyricsLayoutMode.values)
+            RadioListTile<LyricsLayoutMode>(
+              value: mode,
+              groupValue: style.layout,
+              title: Text(mode.label),
+              onChanged: (LyricsLayoutMode? value) async {
+                if (value == null) return;
+                await ref.read(lyricsStyleProvider.notifier).setLayout(value);
+                if (sheetContext.mounted) Navigator.pop(sheetContext);
+              },
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<void> _showMobileQueue(
+  BuildContext context,
+  WidgetRef ref,
+  PlayerUiState state,
+  PlayerController controller,
+) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (BuildContext sheetContext) => SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(sheetContext).height * .65,
+        child: Column(
+          children: <Widget>[
+            ListTile(
+              title: Text('播放列表（${state.queue.length}）'),
+              trailing: IconButton(
+                tooltip: '关闭',
+                onPressed: () => Navigator.pop(sheetContext),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: state.queue.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final Track track = state.queue[index];
+                  return ListTile(
+                    selected: index == state.currentIndex,
+                    leading: Text('${index + 1}'),
+                    title: Text(
+                      track.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      track.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () async {
+                      await controller.playAt(index);
+                      if (sheetContext.mounted) Navigator.pop(sheetContext);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _MobileProgress extends ConsumerWidget {
@@ -991,6 +1301,7 @@ class _QuickAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
     onTap: onTap,
     child: GlassPanel(
       borderRadius: BorderRadius.circular(18),
