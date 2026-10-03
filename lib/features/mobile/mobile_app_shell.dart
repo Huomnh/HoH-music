@@ -489,11 +489,18 @@ class _MobileLibraryViewState extends ConsumerState<_MobileLibraryView> {
               for (final Playlist playlist in playlists)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
-                  child: _LargePlaylistCard(
-                    playlist: playlist,
-                    onTap: () =>
-                        setState(() => _selectedPlaylistId = playlist.id),
-                  ),
+                  child: playlist.isFavorites
+                      ? _LargePlaylistCard(
+                          playlist: playlist,
+                          onTap: () =>
+                              setState(() => _selectedPlaylistId = playlist.id),
+                        )
+                      : _SwipeToDeletePlaylistCard(
+                          playlist: playlist,
+                          onTap: () =>
+                              setState(() => _selectedPlaylistId = playlist.id),
+                          onDelete: () => _deletePlaylist(playlist),
+                        ),
                 ),
               _LargePlaylistCard(
                 playlist: const Playlist(id: 'all-songs', name: '所有歌曲'),
@@ -530,6 +537,32 @@ class _MobileLibraryViewState extends ConsumerState<_MobileLibraryView> {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('导入失败：$error')));
     }
+  }
+
+  Future<void> _deletePlaylist(Playlist playlist) async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: const Text('删除歌单？'),
+        content: Text('将删除「${playlist.name}」，歌曲文件不会被删除。'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    await ref.read(playlistsProvider.notifier).remove(playlist.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('已删除歌单「${playlist.name}」')));
   }
 }
 
@@ -641,6 +674,79 @@ class _LargePlaylistCard extends StatelessWidget {
             Icon(Icons.chevron_right_rounded, color: accent.primary),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// 移动端歌单卡片的左滑删除容器。
+///
+/// 不引入第三方 Slidable，避免为一个低频手势增加额外依赖；左滑后保留
+/// 垃圾桶按钮，用户需要再次点击确认，避免误触直接删除歌单。
+class _SwipeToDeletePlaylistCard extends StatefulWidget {
+  const _SwipeToDeletePlaylistCard({
+    required this.playlist,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  final Playlist playlist;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  State<_SwipeToDeletePlaylistCard> createState() =>
+      _SwipeToDeletePlaylistCardState();
+}
+
+class _SwipeToDeletePlaylistCardState
+    extends State<_SwipeToDeletePlaylistCard> {
+  bool _revealed = false;
+
+  void _handleDrag(DragUpdateDetails details) {
+    if (details.delta.dx < -2 && !_revealed) {
+      setState(() => _revealed = true);
+    } else if (details.delta.dx > 2 && _revealed) {
+      setState(() => _revealed = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragUpdate: _handleDrag,
+      onHorizontalDragEnd: (_) {},
+      onTap: _revealed ? () => setState(() => _revealed = false) : null,
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: _LargePlaylistCard(
+              playlist: widget.playlist,
+              onTap: widget.onTap,
+            ),
+          ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            width: _revealed ? 68 : 0,
+            margin: EdgeInsets.only(left: _revealed ? 8 : 0),
+            child: _revealed
+                ? DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withValues(alpha: .88),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: IconButton(
+                      tooltip: '删除歌单',
+                      onPressed: widget.onDelete,
+                      color: Colors.white,
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
       ),
     );
   }
